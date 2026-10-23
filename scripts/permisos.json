@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open:*)",
+      "Bash(osascript:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(cp:*)",
+      "Bash(find:*)",
+      "Bash(mdfind:*)",
+      "Bash(pmset:*)",
+      "Bash(say:*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "ask": [
+      "Bash(rm:*)",
+      "Bash(git push:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}
