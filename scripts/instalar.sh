@@ -10,7 +10,6 @@ else
   echo "Claude Code ya está instalado: $(claude --version)"
 fi
 cd "$(dirname "$0")/.."
-mkdir -p .claude && cp scripts/permisos.json .claude/settings.json && echo "Permisos de Jarvis configurados."
 if [ ! -d .git ]; then
   git init -q && git add . && git commit -qm "Jarvis: base inicial"
   echo "Repositorio local creado."

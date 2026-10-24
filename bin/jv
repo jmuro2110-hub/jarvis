@@ -1,0 +1,9 @@
+#!/bin/bash
+# Lanzador de herramientas de Jarvis:  jv pensar "pregunta" --hablar | jv decir "hola" | jv modo gamer | jv resumen | jv hq --abrir
+export PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+herramienta="$1"; shift
+if [ -z "$herramienta" ] || [ ! -f "$DIR/$herramienta.py" ]; then
+  echo "Herramientas: pensar, decir, avisar, modo, resumen, vigia, hq, agenda"; exit 1
+fi
+exec uv run --quiet --script "$DIR/$herramienta.py" "$@"

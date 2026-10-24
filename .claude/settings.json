@@ -15,7 +15,14 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "Bash(bin/jv:*)",
+      "Bash(afplay:*)",
+      "Bash(pkill -x say)",
+      "Bash(pkill -x afplay)",
+      "Edit(memoria/**)",
+      "Edit(modulos/**)",
+      "Edit(config.json)"
     ],
     "ask": [
       "Bash(rm:*)",

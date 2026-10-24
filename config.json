@@ -1,0 +1,13 @@
+{
+  "ciudad": "Ciudad de Mexico",
+  "hora_resumen": "07:30",
+  "silencio": ["23:00", "07:00"],
+  "voz_mac": "",
+  "elevenlabs_voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "elevenlabs_modelo": "eleven_flash_v2_5",
+  "elevenlabs_limite_mes": 55000,
+  "minutos_juego_aviso": [60, 120, 180],
+  "rutina_url": "https://jmuro2110-hub.github.io/rutina/",
+  "facial_url": "",
+  "modos": {}
+}
