@@ -7,3 +7,4 @@
 - Sensibilidad: JARVIS_SENSIBILIDAD (3.0; súbela si el ruido lo activa). Prueba: voz/prueba_mic.py.
 - Cerebro: `bin/pensar.py` → Claude (continúa la conversación si fue hace menos de 30 min) y, si topa límite o falla, ChatGPT con Codex.
 - Voz: `bin/decir.py` → ElevenLabs si hay ELEVENLABS_API_KEY en ~/.jarvis/secretos.env y crédito del mes; si no, `say` de macOS (Juan).
+- Latencia: `bin/telemetria.py` mide cada etapa (sin guardar texto ni audio) en ~/.jarvis/metricas_latencia.jsonl; `jv latencia` muestra el resumen. Pruebas: `uv run --python 3.11 --with numpy python -m unittest tests/test_latencia.py`.

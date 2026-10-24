@@ -4,6 +4,6 @@ export PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 herramienta="$1"; shift
 if [ -z "$herramienta" ] || [ ! -f "$DIR/$herramienta.py" ]; then
-  echo "Herramientas: pensar, decir, avisar, modo, resumen, vigia, hq, agenda"; exit 1
+  echo "Herramientas: pensar, decir, avisar, modo, resumen, vigia, hq, agenda, latencia"; exit 1
 fi
 exec uv run --quiet --script "$DIR/$herramienta.py" "$@"

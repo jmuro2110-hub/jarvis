@@ -13,6 +13,7 @@ class Oido:
         self.cola = queue.Queue()
         self.sens = sensibilidad
         self.ruido = None
+        self.ultima = None      # telemetría: (inicio de voz, último pedazo con voz, fin) en perf_counter_ns
         self.stream = sd.InputStream(samplerate=RATE, channels=1, dtype="int16",
                                      blocksize=CHUNK, device=mic, callback=self._cb)
 
@@ -52,6 +53,7 @@ class Oido:
             if not hablando:
                 if rms > umbral:
                     hablando, silencio, voz, con_voz = True, 0, list(previo) + [b], 1
+                    t_voz = t_ultima = time.perf_counter_ns()
                 else:
                     self.ruido = 0.97 * self.ruido + 0.03 * rms
                     previo.append(b)
@@ -63,11 +65,13 @@ class Oido:
                     silencio += 1
                 else:
                     silencio, con_voz = 0, con_voz + 1
+                    t_ultima = time.perf_counter_ns()
                 duracion = len(voz) * 0.1
                 if silencio * 0.1 >= fin_silencio or duracion >= max_dur:
                     if con_voz < 3:      # menos de 0.3 s de voz: ruidito
                         hablando, voz, con_voz = False, [], 0
                         continue
+                    self.ultima = (t_voz, t_ultima, time.perf_counter_ns())
                     return np.concatenate(voz).astype(np.float32) / 32768.0
 
 

@@ -5,6 +5,7 @@
 import json, os, re, shutil, subprocess, sys, tempfile, time, pathlib, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from comun import JARVIS, CASA, log, estado
+import telemetria as tm
 
 INSTRUCCION_VOZ = (
     "Te están hablando por voz. Responde en el idioma en que te hablaron. "
@@ -41,13 +42,16 @@ def claude(texto, voz):
         cmd.append("--continue")
     if voz:
         cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
-    try:
-        r = subprocess.run(cmd, cwd=JARVIS, capture_output=True, text=True, timeout=300)
-    except subprocess.TimeoutExpired:
-        return None, "tardó demasiado"
-    salida, err = (r.stdout or "").strip(), (r.stderr or "").strip()
-    if r.returncode != 0 or not salida or (LIMITE_RE.search(salida) and len(salida) < 400):
-        return None, (salida or err)[:300]
+    with tm.etapa("claude_p", ruta="claude") as e:      # proceso completo: arranque + API + salida
+        try:
+            r = subprocess.run(cmd, cwd=JARVIS, capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            e.estado = "timeout"
+            return None, "tardó demasiado"
+        salida, err = (r.stdout or "").strip(), (r.stderr or "").strip()
+        if r.returncode != 0 or not salida or (LIMITE_RE.search(salida) and len(salida) < 400):
+            e.estado = "error"
+            return None, (salida or err)[:300]
     return salida, None
 
 def _codex_valido(c):
@@ -78,33 +82,39 @@ def codex(texto, voz):
              ("[Instrucción] " + INSTRUCCION_VOZ + "\n\n" if voz else "") + "JP dice: " + texto
     with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as t:
         salida_f = t.name
-    try:
-        r = subprocess.run([exe, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write",
-                            "-o", salida_f, prompt], cwd=JARVIS, capture_output=True, text=True,
-                           timeout=300, stdin=subprocess.DEVNULL)
-        salida = pathlib.Path(salida_f).read_text().strip() or (r.stdout or "").strip()
-    except subprocess.TimeoutExpired:
-        return None, "Codex tardó demasiado"
-    finally:
-        try: os.unlink(salida_f)
-        except OSError: pass
-    if r.returncode != 0 or not salida:
-        return None, (r.stderr or "")[-300:]
+    with tm.etapa("codex_exec", ruta="codex") as e:
+        try:
+            r = subprocess.run([exe, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write",
+                                "-o", salida_f, prompt], cwd=JARVIS, capture_output=True, text=True,
+                               timeout=300, stdin=subprocess.DEVNULL)
+            salida = pathlib.Path(salida_f).read_text().strip() or (r.stdout or "").strip()
+        except subprocess.TimeoutExpired:
+            e.estado = "timeout"
+            return None, "Codex tardó demasiado"
+        finally:
+            try: os.unlink(salida_f)
+            except OSError: pass
+        if r.returncode != 0 or not salida:
+            e.estado = "error"
+            return None, (r.stderr or "")[-300:]
     return salida, None
 
 def pensar(texto, voz=False):
     estado("pensando", texto)
     resp, err = claude(texto, voz)
     cerebro = "claude"
+    tm.ruta("claude")
     if resp is None:
         log(f"Claude no respondió ({err}); paso a ChatGPT")
         resp, err2 = codex(texto, voz)
         cerebro = "chatgpt"
+        tm.ruta("codex")
         if resp is None:
             log(f"ChatGPT tampoco ({err2})")
             resp = ("Señor, mis dos cerebros están fuera de servicio por el momento. "
                     "Los comandos rápidos siguen funcionando.")
             cerebro = "ninguno"
+            tm.ruta("ninguno")
     _guardar(texto, resp, cerebro)
     estado("listo")
     return resp, cerebro
@@ -121,8 +131,11 @@ if __name__ == "__main__":
     texto = " ".join(args).strip()
     if not texto:
         print("Uso: pensar.py \"pregunta\" [--hablar]"); sys.exit(1)
+    tm.desde_entorno("texto")               # ⌃⌥Espacio / terminal: el total empieza aquí
     resp, cerebro = pensar(texto, voz=hablar)
     print(resp)
     if hablar:
         from decir import decir
         decir(primera_linea(resp))
+    else:
+        tm.total()

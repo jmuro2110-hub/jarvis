@@ -61,6 +61,7 @@ El sistema va a crecer y cambiar. Si aparece un tema nuevo, crea un módulo nuev
 | `bin/jv resumen` | Resumen del día con voz |
 | `bin/jv hq --abrir` | Regenera y abre el panel Jarvis HQ |
 | `bin/jv abrir URL [--escuela\|--personal]` | Abre una página en el perfil de Chrome correcto (NUNCA uses `open URL` a secas) |
+| `bin/jv latencia [--dias N]` | Cuánto tarda cada etapa (oído, transcripción, Claude/Codex, voz): p50, p90, mín, máx |
 
 - Pendientes de JP: `memoria/pendientes.md`, una línea por pendiente: `- [ ] Qué | materia o área | AAAA-MM-DD`. Cuando JP diga "apunta", "recuérdame", "tengo tarea de…", agrégalo ahí con fecha si la dice. Cuando diga que ya lo hizo, márcalo `[x]`. El vigía avisa solo de lo que está ahí.
 - Dinero y meta del coche: `memoria/dinero.json`. Cuando JP diga que ganó o gastó algo del negocio, agrega un movimiento `{"fecha": "AAAA-MM-DD", "monto": 500, "concepto": "...", "tipo": "ingreso" | "gasto"}`.

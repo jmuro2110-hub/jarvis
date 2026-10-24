@@ -5,6 +5,7 @@
 import fcntl, json, re, subprocess, sys, urllib.request, datetime, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from comun import CASA, config, secretos, log, estado, leer_json, escribir_json, limpiar_para_voz
+import telemetria as tm
 
 PREFERIDAS = ["Juan (Enhanced)", "Juan (Premium)", "Jorge (Enhanced)", "Juan", "Jorge", "Diego"]
 
@@ -49,10 +50,12 @@ def elevenlabs(texto, c, s):
     mp3.write_bytes(audio)
     u[mes] = usados + len(texto)
     escribir_json(CASA / "eleven_uso.json", u)
+    tm.voz_empieza()
     subprocess.run(["afplay", str(mp3)])
     return True
 
 def decir(texto, forzar=False):
+    tm.voz_preparando()
     texto = limpiar_para_voz(texto)
     if not texto:
         return
@@ -65,6 +68,7 @@ def decir(texto, forzar=False):
             v = voz_mac(c)
             if v:
                 cmd += ["-v", v]
+            tm.voz_empieza()
             subprocess.run(cmd + [texto])
         estado("listo")
 
@@ -76,4 +80,6 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--callar"]:
         callar()
     else:
+        if os.environ.get("JARVIS_REQ_ID"):
+            tm.desde_entorno(con_total=False)   # lo llamó Claude/otro proceso dentro de una petición
         decir(" ".join(sys.argv[1:]) or "Sistemas en línea, señor.")

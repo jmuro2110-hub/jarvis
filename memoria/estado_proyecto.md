@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-24
+**Última actualización:** 2026-10-24 (upgrade 01: latencia)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -27,6 +27,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Panel Jarvis HQ (Ctrl+Alt+H): meta del coche, pendientes, clima, juego, últimas pláticas.
 - Hammerspoon: Ctrl+Alt+J hablar, Ctrl+Alt+Espacio escribir, Ctrl+Alt+H panel, Ctrl+Alt+. callar. (Teclado Windows: Alt = Opción.)
 - Arranque automático (Jarvis.command, una sola instancia, se reinicia solo).
+- Medición de latencia (upgrade 01, 2026-10-24): `bin/telemetria.py` registra cada etapa con ID por petición en ~/.jarvis/metricas_latencia.jsonl (sin contenido); `jv latencia` da p50/p90/mín/máx por etapa, origen y ruta. 19 pruebas con mocks en tests/. Primera muestra real: `claude -p` = 13.4 s para una respuesta trivial (texto).
 
 ## Decisiones tomadas
 - No IA pesada local (Mac Intel). Nube para lo pesado, local para lo simple.
@@ -51,7 +52,8 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Se le respondió a ChatGPT cómo funciona el cerebro (proceso en frío por pregunta, --continue, sin modo conversación, sin barge-in). Esperando su roadmap detallado y el PRIMER prompt para Jarvis. Claude lo revisa antes de aplicarlo.
+- Upgrade 01 (latencia) hecho y probado. Ahora: juntar muestras reales (usar Jarvis normal unos días, idealmente 10+ por ruta) y correr `jv latencia`; con eso ChatGPT diseña el siguiente upgrade.
+- Límite conocido: `claude_p` es el subproceso completo; no separa arranque en frío de la respuesta del modelo. El total termina al lanzar say/afplay, no al primer sonido.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.
