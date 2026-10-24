@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-24 (upgrade 01: latencia)
+**Última actualización:** 2026-10-24 (upgrade 02: seguridad)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -28,6 +28,8 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Hammerspoon: Ctrl+Alt+J hablar, Ctrl+Alt+Espacio escribir, Ctrl+Alt+H panel, Ctrl+Alt+. callar. (Teclado Windows: Alt = Opción.)
 - Arranque automático (Jarvis.command, una sola instancia, se reinicia solo).
 - Medición de latencia (upgrade 01, 2026-10-24): `bin/telemetria.py` registra cada etapa con ID por petición en ~/.jarvis/metricas_latencia.jsonl (sin contenido); `jv latencia` da p50/p90/mín/máx por etapa, origen y ruta. 19 pruebas con mocks en tests/. Primera muestra real: `claude -p` = 13.4 s para una respuesta trivial (texto).
+- Seguridad (upgrade 02, 2026-10-24): modo asistente separado del de desarrollo. `claude -p` corre con `--restricted` + guardia PreToolUse (`bin/guardia.py` → `bin/politica.py`); Codex de respaldo en `read-only` sin plugins/computer-use/MCP. Bloquea antes de ejecutar: borrar, enviar, pagar (requieren aprobación y aún no hay interfaz: quedan bloqueados), publicar en IG/TikTok/Snapchat y conectar Snapchat (prohibido siempre), Classroom con cuenta personal, y cualquier comando no clasificado. Sin perfil escolar ya no cae al personal. Auditoría en ~/.jarvis/seguridad.jsonl. 24 pruebas nuevas (tests/test_seguridad.py) + las 19 del 01 = 43 OK. Ver modulos/seguridad.md.
+- Arreglo: "desactiva/quita/apaga… el modo X" ya no activa el modo (lo resuelve el cerebro).
 
 ## Decisiones tomadas
 - No IA pesada local (Mac Intel). Nube para lo pesado, local para lo simple.
@@ -52,8 +54,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 01 (latencia) hecho y probado. Ahora: juntar muestras reales (usar Jarvis normal unos días, idealmente 10+ por ruta) y correr `jv latencia`; con eso ChatGPT diseña el siguiente upgrade.
-- Límite conocido: `claude_p` es el subproceso completo; no separa arranque en frío de la respuesta del modelo. El total termina al lanzar say/afplay, no al primer sonido.
+- Upgrade 02 (seguridad) hecho y probado (Parte A completa + autorizaciones de un solo uso y auditoría). Falta de la Parte B: la interfaz local confiable que muestre la acción completa y cree la autorización; hasta entonces, todo lo que requiere confirmación queda bloqueado.
+- Siguiente: Upgrade 03 = latencia (13.4 s de `claude -p`). Pista encontrada: `claude -p` hereda stdin y puede esperar 3 s ("no stdin data received in 3s") cuando no lo llama una terminal.
+- Límites abiertos de seguridad: `--continue` puede retomar la última sesión de desarrollo (contexto, no permisos); WebFetch puede sacar datos en una URL; Codex en read-only puede LEER cualquier archivo (incluidas llaves) y mandarlo a OpenAI como contexto; el desarrollo interactivo sigue con permisos amplios a propósito.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.

@@ -16,6 +16,23 @@ INSTRUCCION_VOZ = (
 LIMITE_RE = re.compile(r"(usage limit|limit reached|rate.?limit|out of (extra )?usage|"
                        r"credit balance|quota|overloaded|hit your limit)", re.I)
 HIST = CASA / "historial.jsonl"
+
+# Modo asistente (upgrade 02): una consulta cotidiana NO hereda los permisos de desarrollo.
+# --restricted ignora .claude/settings.json del proyecto; solo valen el guardia y las reglas de
+# seguridad/claude_asistente.json. Sin MCP, sin preguntas (dontAsk: lo no permitido se niega).
+ASISTENTE_CLAUDE = ["--restricted", "--strict-mcp-config",
+                    "--tools", "Bash,Read,Edit,Write,Glob,Grep,WebSearch,WebFetch",
+                    "--permission-mode", "dontAsk",
+                    "--settings", str(JARVIS / "seguridad" / "claude_asistente.json")]
+# Codex de respaldo: solo conversa. Sandbox de solo lectura (sin escribir, sin red, sin AppleScript)
+# y sin plugins/MCP de computer-use o navegador, que actuarían fuera del sandbox.
+ASISTENTE_CODEX = ["--sandbox", "read-only", "-c", 'approval_policy="never"',
+                   "--disable", "plugins", "--disable", "apps", "--disable", "computer_use",
+                   "--disable", "browser_use", "--disable", "browser_use_external",
+                   "-c", "mcp_servers.node_repl.enabled=false"]
+
+def entorno_asistente():
+    return {**os.environ, "JARVIS_MODO": "asistente"}
 SESION_MIN = 30   # después de 30 min sin hablar, empieza conversación nueva (ahorra uso)
 
 def _historial(n=6):
@@ -42,9 +59,11 @@ def claude(texto, voz):
         cmd.append("--continue")
     if voz:
         cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
+    cmd += ASISTENTE_CLAUDE
     with tm.etapa("claude_p", ruta="claude") as e:      # proceso completo: arranque + API + salida
         try:
-            r = subprocess.run(cmd, cwd=JARVIS, capture_output=True, text=True, timeout=300)
+            r = subprocess.run(cmd, cwd=JARVIS, capture_output=True, text=True, timeout=300,
+                               env=entorno_asistente())
         except subprocess.TimeoutExpired:
             e.estado = "timeout"
             return None, "tardó demasiado"
@@ -84,9 +103,9 @@ def codex(texto, voz):
         salida_f = t.name
     with tm.etapa("codex_exec", ruta="codex") as e:
         try:
-            r = subprocess.run([exe, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write",
+            r = subprocess.run([exe, "exec", "--skip-git-repo-check", *ASISTENTE_CODEX,
                                 "-o", salida_f, prompt], cwd=JARVIS, capture_output=True, text=True,
-                               timeout=300, stdin=subprocess.DEVNULL)
+                               timeout=300, stdin=subprocess.DEVNULL, env=entorno_asistente())
             salida = pathlib.Path(salida_f).read_text().strip() or (r.stdout or "").strip()
         except subprocess.TimeoutExpired:
             e.estado = "timeout"

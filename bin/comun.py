@@ -139,13 +139,17 @@ def perfiles_chrome():
     return res
 
 def abrir_url(url, mundo="personal"):
-    """Abre la página en el perfil de Chrome correcto (personal o escuela)."""
+    """Abre la página en el perfil de Chrome correcto (personal o escuela). False si no se abrió."""
     import subprocess
     perfil = perfiles_chrome().get(mundo)
     if perfil:
         subprocess.run(["open", "-na", "Google Chrome", "--args", f"--profile-directory={perfil}", url])
+    elif mundo == "escuela":
+        log(f"no abrí {url[:60]}: no encuentro el perfil de la escuela")   # nunca cae al personal
+        return False
     else:
         subprocess.run(["open", url])
+    return True
 
 ESCUELA_RE = re.compile(r"classroom\.google|meet\.google|/a/[^/]*\.edu|escuela", re.I)
 

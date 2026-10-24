@@ -118,7 +118,8 @@ class B_Claude(Base):
         self.assertEqual((resp, cerebro), ("Señor, todo en orden.\n\nDetalle.", "claude"))
         cmd, kw = llamadas[0]
         self.assertEqual(cmd, ["claude", "-p", "cómo vamos", "--continue",
-                               "--append-system-prompt", pensar_mod.INSTRUCCION_VOZ])
+                               "--append-system-prompt", pensar_mod.INSTRUCCION_VOZ,
+                               *pensar_mod.ASISTENTE_CLAUDE])          # candados del upgrade 02
         self.assertEqual(kw["timeout"], 300)
         f = self.etapas()["claude_p"]
         self.assertEqual((f["ruta"], f["estado"]), ("claude", "exito"))

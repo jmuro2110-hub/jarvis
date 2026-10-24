@@ -1,0 +1,59 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bin/jv *)",
+      "Bash(open -a *)",
+      "Bash(osascript -e *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(ls)",
+      "Bash(ls *)",
+      "Bash(date)",
+      "Bash(mdfind *)",
+      "Bash(say *)",
+      "Bash(afplay *)",
+      "Bash(pkill -x say)",
+      "Bash(pkill -x afplay)",
+      "Bash(pmset sleepnow)",
+      "Bash(pmset displaysleepnow)",
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "Edit(memoria/pendientes.md)",
+      "Edit(memoria/dinero.json)",
+      "Edit(memoria/bitacora.md)"
+    ],
+    "deny": [
+      "Bash(rm *)",
+      "Bash(sudo *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(curl *)",
+      "Bash(bin/jv llave *)",
+      "Bash(bin/jv pensar *)",
+      "Read(~/.jarvis/secretos.env)",
+      "Read(~/.jarvis/autorizaciones.json)",
+      "Read(~/.codex/auth.json)",
+      "Edit(.claude/**)",
+      "Edit(seguridad/**)",
+      "Edit(bin/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 -I \"$CLAUDE_PROJECT_DIR/bin/guardia.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

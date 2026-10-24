@@ -21,6 +21,7 @@ from comun import CASA, JARVIS, config, estado, log, abrir_url, mundo_de        
 from decir import decir, callar                               # noqa: E402
 from pensar import pensar, primera_linea                      # noqa: E402
 from modo import modo, disponibles                            # noqa: E402
+import telemetria as tm                                       # noqa: E402
 
 SENSIBILIDAD = float(os.environ.get("JARVIS_SENSIBILIDAD", "3.0"))  # más alto = necesita voz más fuerte
 MIC = os.environ.get("JARVIS_MIC")
@@ -72,6 +73,8 @@ def comando_rapido(t):
     if re.fullmatch(r"(qué hora es|la hora|dime la hora)", t):
         n = datetime.datetime.now(); return f"Son las {n.hour}:{n.minute:02d}, señor."
     m = re.search(r"\bmodo (\w+)", t)
+    if m and re.search(r"\b(desactiva|quita|apaga|sal del|termina|cancela|ya no)\b", t):
+        m = None        # "desactiva el modo gamer": no lo actives; que lo resuelva el cerebro
     if m and m.group(1) in disponibles():
         return modo(m.group(1))
     if re.search(r"\b(abre|muestra|enséñame) (el |mi )?(panel|hq|cuartel)\b", t):
@@ -90,7 +93,8 @@ def comando_rapido(t):
         if app in WEBS:
             url = WEBS[app]
             mundo = "escuela" if escuela else mundo_de(url)
-            abrir_url(url, mundo)
+            if not abrir_url(url, mundo):
+                return "No encuentro su perfil de la escuela en Chrome, señor. No la abro en el personal."
             return f"Abriendo {app}" + (" con su cuenta de la escuela." if mundo == "escuela" else ".")
         nombre = APPS.get(app) or app.title()
         if subprocess.run(["open", "-a", nombre], capture_output=True).returncode == 0:
@@ -108,19 +112,43 @@ IDIOMA = os.environ.get("JARVIS_IDIOMA", "es")
 def oir_bien(audio, preciso):
     """Transcripción buena: Groq (gratis, Whisper grande) y si falla, el oído local."""
     from comun import secretos
-    texto = transcribir_nube(audio, secretos().get("GROQ_API_KEY"), IDIOMA)
+    llave = secretos().get("GROQ_API_KEY")
+    texto = None
+    if llave:
+        with tm.etapa("transcripcion_groq") as e:
+            texto = transcribir_nube(audio, llave, IDIOMA)
+            if texto is None:
+                e.estado = "error"
     if texto is not None:
         return "" if es_fantasma(texto) else texto
-    return transcribir(preciso, audio, IDIOMA, prompt=VOCAB, preciso=True)
+    with tm.etapa("transcripcion_local") as e:
+        e.estado = "fallback" if llave else "exito"
+        return transcribir(preciso, audio, IDIOMA, prompt=VOCAB, preciso=True)
+
+
+def medir_frase(oido):
+    """Telemetría: duración de la frase (incluye el silencio final) y espera de silencio."""
+    try:
+        t_voz, t_ultima, t_fin = oido.ultima
+        tm.registrar("captura_frase", (t_fin - t_voz) / 1e6)
+        tm.registrar("espera_silencio", (t_fin - t_ultima) / 1e6)
+        tm.fin_frase(t_fin)
+    except Exception:
+        pass
 
 
 def procesar(texto):
     print(f"🗣  Tú: {texto}")
-    rapida = comando_rapido(texto)
+    with tm.etapa("comando_rapido", ruta="rapido") as e:
+        rapida = comando_rapido(texto)
+        if rapida is None:
+            e.ruta, e.estado = None, "fallback"       # no era comando rápido: pasa al cerebro
     if rapida is not None:
+        tm.ruta("rapido")
         print(f"🤖 Jarvis: {rapida or '(hecho)'}")
         log(f"rápido: {texto} → {rapida}")
         if rapida: decir(rapida)
+        else: tm.total()                              # acción sin voz: la respuesta es hacerla
         estado("listo"); return
     subprocess.Popen(["afplay", "/System/Library/Sounds/Pop.aiff"])
     resp, cerebro = pensar(texto, voz=True)
@@ -137,6 +165,9 @@ def pedir_comando(oido, preciso):
     audio = oido.frase(fin_silencio=1.3, max_dur=25, espera_inicio=10)
     if audio is None or isinstance(audio, str):
         print("   (no escuché nada)"); estado("listo"); return
+    if not tm.activa():
+        tm.nueva("voz")
+    medir_frase(oido)
     estado("pensando", "transcribiendo…")
     texto = oir_bien(audio, preciso)
     if texto:
@@ -164,10 +195,14 @@ def main():
                 if isinstance(audio, str):                # atajo de teclado
                     pedir_comando(oido, preciso)
                 else:
+                    t0 = tm.ahora()
                     borrador = transcribir(rapido, audio, IDIOMA)
                     activado, _ = separar(borrador)
                     if not activado:
                         continue
+                    tm.nueva("voz")
+                    tm.registrar("deteccion_jarvis", (tm.ahora() - t0) / 1e6)
+                    medir_frase(oido)
                     estado("pensando", "transcribiendo…")
                     texto = oir_bien(audio, preciso) or borrador
                     activado2, orden = separar(texto)
@@ -179,6 +214,7 @@ def main():
                         pedir_comando(oido, preciso)      # solo dijo "Jarvis"
             except Exception as e:
                 log(f"voz error: {e}"); print(f"⚠️  {e}"); estado("listo")
+            tm.terminar()
             oido.vaciar()
 
 

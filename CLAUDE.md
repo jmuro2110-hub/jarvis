@@ -41,6 +41,7 @@ Cada módulo tiene su archivo en `modulos/`. Léelo antes de trabajar en ese tem
 | Trabajo y meta del coche | `modulos/trabajo.md` |
 | Plática e ideas | `modulos/platica.md` |
 | Voz (oídos y boca) | `modulos/voz.md` |
+| Seguridad (modo asistente, guardia, política) | `modulos/seguridad.md` |
 
 El sistema va a crecer y cambiar. Si aparece un tema nuevo, crea un módulo nuevo en vez de meterlo en otro.
 
