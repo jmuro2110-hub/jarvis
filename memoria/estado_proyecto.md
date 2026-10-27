@@ -58,9 +58,10 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 04 (conversación continua) hecho y con pruebas automáticas en verde (149). **Validación física con el micrófono PD100X: PENDIENTE** hasta que JP haga la prueba guiada.
+- Upgrade 04 (conversación continua) hecho: 149 pruebas OK y **prueba física con el PD100X aprobada (2026-10-27)**: hora → «Abre Spotify» y «Ponle pausa» sin «Jarvis» → «Cierra la conversación» (cierre manual) → «Abre Spotify» ya no se ejecutó; planetas → «¿Cuál de esos es el más grande?» = Júpiter (sesión reanudada); 15 s de silencio cerraron solos. Groq 0.7–1.5 s por turno; gestor 0–4 ms. Falta solo que JP confirme a ojo el anillo verde del HUD (no se pudo capturar la pantalla).
+- Arreglado de paso: cada reinicio dejaba vivos los bucles viejos de Jarvis.command (había 3 voces y 3 vigías escuchando). Ahora el arranque los cierra primero.
 - Siguiente: stream-json (empezar a hablar antes) y después barge-in. NO se empezó.
-- Límites abiertos: sin barge-in (no se le puede interrumpir con la voz mientras habla; sí con ⌃⌥.); sesiones del asistente y de desarrollo comparten la carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
+- Límites abiertos: si JP dice «Jarvis» y hace pausa, el tin + vaciar la cola puede comerse el inicio de la orden («dime tres» se perdió en la prueba; comportamiento previo al 04); sin barge-in (no se le puede interrumpir con la voz mientras habla; sí con ⌃⌥.); sesiones del asistente y de desarrollo comparten la carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.
