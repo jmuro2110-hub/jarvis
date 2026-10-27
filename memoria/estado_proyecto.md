@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-24 (upgrade 02: seguridad)
+**Última actualización:** 2026-10-26 (upgrade 03: latencia, sesiones, Codex aislado)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -30,6 +30,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Medición de latencia (upgrade 01, 2026-10-24): `bin/telemetria.py` registra cada etapa con ID por petición en ~/.jarvis/metricas_latencia.jsonl (sin contenido); `jv latencia` da p50/p90/mín/máx por etapa, origen y ruta. 19 pruebas con mocks en tests/. Primera muestra real: `claude -p` = 13.4 s para una respuesta trivial (texto).
 - Seguridad (upgrade 02, 2026-10-24): modo asistente separado del de desarrollo. `claude -p` corre con `--restricted` + guardia PreToolUse (`bin/guardia.py` → `bin/politica.py`); Codex de respaldo en `read-only` sin plugins/computer-use/MCP. Bloquea antes de ejecutar: borrar, enviar, pagar (requieren aprobación y aún no hay interfaz: quedan bloqueados), publicar en IG/TikTok/Snapchat y conectar Snapchat (prohibido siempre), Classroom con cuenta personal, y cualquier comando no clasificado. Sin perfil escolar ya no cae al personal. Auditoría en ~/.jarvis/seguridad.jsonl. 24 pruebas nuevas (tests/test_seguridad.py) + las 19 del 01 = 43 OK. Ver modulos/seguridad.md.
 - Arreglo: "desactiva/quita/apaga… el modo X" ya no activa el modo (lo resuelve el cerebro).
+- Upgrade 03 (2026-10-26): `claude -p` con stdin cerrado (se acabó la espera de 3 s) y `--output-format json`. Respuesta trivial: 5.1–11.9 s → 2.0–3.9 s (n=4 antes, 9 después). Telemetría nueva: claude_duracion, claude_api (solo sesión nueva), claude_arranque_est (estimación ≈0.8–1.4 s) y sesión nueva/reanudada en `jv latencia`.
+- Sesiones separadas (`bin/sesiones.py`, ~/.jarvis/sesiones.json 0600): personal (voz + texto) y auto (resumen matutino), con ID explícito (`--session-id` / `--resume`), 30 min de vigencia, nunca `--continue`. El historial lleva `origen`; a Codex solo le llega contexto personal.
+- Codex de respaldo aislado: sin herramientas + perfil de permisos `jarvis_asistente` con ~/.jarvis denegado por Seatbelt (probado con `codex exec` real y canario). Autoverificación por versión (0.164.0) y canario; si falla, respaldo deshabilitado con aviso. 88 pruebas (43 viejas + 45 nuevas) OK.
 
 ## Decisiones tomadas
 - No IA pesada local (Mac Intel). Nube para lo pesado, local para lo simple.
@@ -54,9 +57,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 02 (seguridad) hecho y probado (Parte A completa + autorizaciones de un solo uso y auditoría). Falta de la Parte B: la interfaz local confiable que muestre la acción completa y cree la autorización; hasta entonces, todo lo que requiere confirmación queda bloqueado.
-- Siguiente: Upgrade 03 = latencia (13.4 s de `claude -p`). Pista encontrada: `claude -p` hereda stdin y puede esperar 3 s ("no stdin data received in 3s") cuando no lo llama una terminal.
-- Límites abiertos de seguridad: `--continue` puede retomar la última sesión de desarrollo (contexto, no permisos); WebFetch puede sacar datos en una URL; Codex en read-only puede LEER cualquier archivo (incluidas llaves) y mandarlo a OpenAI como contexto; el desarrollo interactivo sigue con permisos amplios a propósito.
+- Upgrade 03 terminado y probado (commits 03A a0e0e5f, 03B 122f43a, 03C 62ac206). NO se empezó el 04.
+- Siguiente: Upgrade 04 = stream-json (tiempo a primer texto, empezar a hablar antes) / conversación continua.
+- Límites abiertos: sesiones del asistente y de desarrollo comparten la carpeta de proyecto de Claude (un `claude --continue` a mano puede caer en una del asistente; al revés no); WebFetch puede sacar datos en una URL; en Codex queda `apply_patch` y recursos MCP dentro del modo código, que falla cerrado (host apagado) y sin servidores MCP; si se actualiza Codex el respaldo se apaga solo hasta volver a probar y subir `CODEX_VERIFICADO`; el desarrollo interactivo sigue con permisos amplios a propósito.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.
