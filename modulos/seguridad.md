@@ -9,3 +9,10 @@
 - **Asistente puede escribir solo** `memoria/pendientes.md`, `memoria/dinero.json` y `memoria/bitacora.md`.
 - **Clasificar algo nuevo:** en modo desarrollo, agregar el caso en `guardia.py`/`politica.py` y su prueba en `tests/test_seguridad.py`.
 - Pruebas: `uv run --python 3.11 --with numpy python -m unittest tests.test_latencia tests.test_seguridad`.
+
+## Sesiones del asistente (upgrade 03)
+- `bin/sesiones.py`: cada origen tiene su propio ID de Claude. **personal** = voz + ⌃⌥Espacio + terminal; **auto** = resumen matutino. Nunca `--continue`: sesión nueva con `--session-id <uuid>`, vigente (<30 min) con `--resume <id exacto>`. Se guarda el `session_id` que DEVUELVE Claude.
+- `~/.jarvis/sesiones.json` (0600): solo id, origen, creada, ultima. Candado `fcntl.flock` + escritura atómica. Una consulta a la vez por origen (`sesion_<origen>.lock`).
+- Si el ID ya no existe ("No conversation found") o el archivo está corrupto → sesión nueva del asistente, nunca la última global. Si Claude falla y responde Codex, la sesión se olvida (la próxima empieza limpia).
+- El historial lleva `origen`; a Codex solo le llega contexto personal.
+- **Límite abierto (no se arregla aquí):** las sesiones del asistente y las de desarrollo viven en la misma carpeta de proyecto de Claude (~/.claude/projects/…Jarvis). Si JP usa `claude --continue` o `/resume` a mano dentro de Jarvis, puede caer en una sesión del asistente (contexto de plática, no permisos: el modo desarrollo no carga el guardia). El asistente nunca cae en una de desarrollo.

@@ -17,6 +17,7 @@ import decir as decir_mod         # noqa: E402
 import jarvis_voz as voz          # noqa: E402
 import oido as oido_mod           # noqa: E402
 import latencia                   # noqa: E402
+import sesiones                   # noqa: E402
 
 GUARDAR_ORIGINAL = pensar_mod._guardar
 CAMPOS = {"fecha", "id", "origen", "etapa", "ms", "ruta", "estado"}
@@ -44,7 +45,7 @@ class Base(unittest.TestCase):
             mock.patch.object(tm, "ARCHIVO", self.archivo),
             mock.patch.object(pensar_mod, "estado"), mock.patch.object(pensar_mod, "log"),
             mock.patch.object(pensar_mod, "_guardar"),
-            mock.patch.object(pensar_mod, "_continuar", return_value=False),
+            mock.patch.object(sesiones, "DIR", pathlib.Path(self.dir.name)),   # nunca ~/.jarvis real
             mock.patch.object(voz, "estado"), mock.patch.object(voz, "log"),
             mock.patch.object(decir_mod, "estado"),
             mock.patch.object(decir_mod, "secretos", return_value={}),
@@ -117,13 +118,14 @@ class B_Claude(Base):
         def run(cmd, **kw):
             llamadas.append((cmd, kw))
             return subprocess.CompletedProcess(cmd, 0, claude_json("Señor, todo en orden.\n\nDetalle.\n"), "")
-        with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)), \
-             mock.patch.object(pensar_mod, "_continuar", return_value=True):
+        sid = "33333333-3333-4333-8333-333333333333"
+        sesiones.guardar("personal", sid, nueva=True)               # sesión personal vigente
+        with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)):
             tm.nueva("voz", tm.ahora())
             resp, cerebro = pensar_mod.pensar("cómo vamos", voz=True)
         self.assertEqual((resp, cerebro), ("Señor, todo en orden.\n\nDetalle.", "claude"))
         cmd, kw = llamadas[0]
-        self.assertEqual(cmd, ["claude", "-p", "cómo vamos", "--output-format", "json", "--continue",
+        self.assertEqual(cmd, ["claude", "-p", "cómo vamos", "--output-format", "json", "--resume", sid,
                                "--append-system-prompt", pensar_mod.INSTRUCCION_VOZ,
                                *pensar_mod.ASISTENTE_CLAUDE])          # candados del upgrade 02
         self.assertEqual(kw["timeout"], 300)
@@ -201,7 +203,8 @@ class E_Privacidad(Base):
         for s in (secreto_p, secreto_r, "gsk_SECRETA", "INSTRUCCION", "Te están hablando"):
             self.assertNotIn(s, texto)
         for f in self.filas():
-            self.assertEqual(set(f), CAMPOS)
+            self.assertEqual(set(f) - {"sesion"}, CAMPOS)                # upgrade 03: "sesion" en filas de Claude
+            self.assertIn(f.get("sesion", "nueva"), tm.SESIONES)
 
     def test_valores_fuera_de_lista_no_pasan(self):
         tm.nueva("voz")
@@ -255,7 +258,8 @@ class F_Regresion(Base):
         hist = pathlib.Path(self.dir.name) / "h.jsonl"
         with mock.patch.object(pensar_mod, "HIST", hist):
             GUARDAR_ORIGINAL("hola", "Señor.", "claude")
-        self.assertEqual(set(json.loads(hist.read_text())), {"t", "fecha", "tu", "jarvis", "cerebro"})
+        self.assertEqual(set(json.loads(hist.read_text())),
+                         {"t", "fecha", "tu", "jarvis", "cerebro", "origen"})   # upgrade 03: + origen
 
     def test_percentiles_y_pocas_muestras(self):
         v = list(range(1, 11))

@@ -6,6 +6,7 @@ import json, os, re, shutil, subprocess, sys, tempfile, time, pathlib, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from comun import JARVIS, CASA, log, estado
 import telemetria as tm
+import sesiones
 
 INSTRUCCION_VOZ = (
     "Te están hablando por voz. Responde en el idioma en que te hablaron. "
@@ -33,23 +34,22 @@ ASISTENTE_CODEX = ["--sandbox", "read-only", "-c", 'approval_policy="never"',
 
 def entorno_asistente():
     return {**os.environ, "JARVIS_MODO": "asistente"}
-SESION_MIN = 30   # después de 30 min sin hablar, empieza conversación nueva (ahorra uso)
+NO_EXISTE_RE = re.compile(r"no conversation found", re.I)   # --resume de un ID que Claude ya no tiene
 
-def _historial(n=6):
+def _historial(n=6, origen=None):
+    """Últimas n pláticas. origen='personal' filtra (líneas viejas sin el campo = personal)."""
     if not HIST.exists():
         return []
-    lineas = HIST.read_text().splitlines()[-n:]
-    return [json.loads(l) for l in lineas if l.strip()]
+    filas = [json.loads(l) for l in HIST.read_text().splitlines()[-(n * 10 if origen else n):] if l.strip()]
+    if origen:
+        filas = [h for h in filas if h.get("origen", "personal") == origen]
+    return filas[-n:]
 
-def _guardar(pregunta, respuesta, cerebro):
+def _guardar(pregunta, respuesta, cerebro, origen="personal"):
     with open(HIST, "a") as f:
         f.write(json.dumps({"t": time.time(), "fecha": f"{datetime.datetime.now():%Y-%m-%d %H:%M}",
-                            "tu": pregunta, "jarvis": respuesta, "cerebro": cerebro},
+                            "tu": pregunta, "jarvis": respuesta, "cerebro": cerebro, "origen": origen},
                            ensure_ascii=False) + "\n")
-
-def _continuar():
-    h = _historial(1)
-    return bool(h) and time.time() - h[-1]["t"] < SESION_MIN * 60 and h[-1]["cerebro"] == "claude"
 
 def _leer_json(salida):
     """--output-format json: un objeto con result, is_error, session_id, duration_ms, duration_api_ms."""
@@ -59,16 +59,16 @@ def _leer_json(salida):
     except ValueError:
         return None
 
-def claude(texto, voz):
-    if not shutil.which("claude"):
-        return None, "no instalado"
+def _claude_una(texto, voz, reanudar):
+    """Una llamada a claude -p. reanudar = ID exacto (--resume) o None (sesión nueva con --session-id).
+    Devuelve (respuesta, error, session_id devuelto)."""
     t_prep = tm.ahora()
     cmd = ["claude", "-p", texto, "--output-format", "json"]
-    if _continuar():
-        cmd.append("--continue")
+    cmd += ["--resume", reanudar] if reanudar else ["--session-id", sesiones.nuevo_id()]
     if voz:
         cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
-    cmd += ASISTENTE_CLAUDE
+    cmd += ASISTENTE_CLAUDE                       # candados del upgrade 02 en CADA llamada, también al reanudar
+    tm.sesion("reanudada" if reanudar else "nueva")
     tm.registrar("claude_preparacion", tm._ms(t_prep))
     with tm.etapa("claude_p", ruta="claude") as e:      # proceso completo: arranque + API + salida
         t0 = tm.ahora()
@@ -78,18 +78,37 @@ def claude(texto, voz):
                                stdin=subprocess.DEVNULL, env=entorno_asistente())
         except subprocess.TimeoutExpired:
             e.estado = "timeout"
-            return None, "tardó demasiado"
+            return None, "tardó demasiado", None
         sub_ms = tm._ms(t0)
         salida, err = (r.stdout or "").strip(), (r.stderr or "").strip()
         d = _leer_json(salida)
         if d is not None:
-            tm.desglose_claude(sub_ms, d.get("duration_ms"), d.get("duration_api_ms"))
+            tm.desglose_claude(sub_ms, d.get("duration_ms"), d.get("duration_api_ms"), bool(reanudar))
         res = (d.get("result") or "").strip() if d and isinstance(d.get("result"), str) else ""
         if r.returncode != 0 or d is None or d.get("is_error") or not res \
                 or (LIMITE_RE.search(res) and len(res) < 400):
             e.estado = "error"
-            return None, (res or salida or err)[:300]
-    return res, None
+            return None, (res or salida or err)[:300], None
+    return res, None, d.get("session_id")
+
+def claude(texto, voz, origen="personal"):
+    if not shutil.which("claude"):
+        return None, "no instalado"
+    with sesiones.turno(origen):                  # serializa por origen: nadie pisa el mismo ID
+        sid = sesiones.vigente(origen)
+        res, err, devuelto = _claude_una(texto, voz, sid)
+        if res is None and sid and NO_EXISTE_RE.search(err or ""):
+            log("la sesión del asistente ya no existe; empiezo otra (sin --continue)")
+            sid = None
+            res, err, devuelto = _claude_una(texto, voz, None)
+        if res is not None:
+            if sid and devuelto != sid:
+                log("Claude devolvió otro session_id al reanudar; guardo el devuelto")
+            if sesiones.valido(devuelto):
+                sesiones.guardar(origen, devuelto, nueva=sid is None or devuelto != sid)
+            else:
+                sesiones.olvidar(origen)          # sin ID confiable: la próxima empieza limpia
+        return res, err
 
 def _codex_valido(c):
     try:
@@ -110,11 +129,13 @@ def buscar_codex():
             return c
     return None
 
-def codex(texto, voz):
+def codex(texto, voz, origen="personal"):
     exe = buscar_codex()
     if not exe:
         return None, "Codex no instalado"
-    contexto = "\n".join(f"JP: {h['tu']}\nJarvis: {h['jarvis'][:400]}" for h in _historial(4))
+    # Contexto de respaldo: solo pláticas personales, y solo para consultas personales.
+    previas = _historial(4, "personal") if origen == "personal" else []
+    contexto = "\n".join(f"JP: {h['tu']}\nJarvis: {h['jarvis'][:400]}" for h in previas)
     prompt = (("Conversación reciente:\n" + contexto + "\n\n") if contexto else "") + \
              ("[Instrucción] " + INSTRUCCION_VOZ + "\n\n" if voz else "") + "JP dice: " + texto
     with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as t:
@@ -136,14 +157,17 @@ def codex(texto, voz):
             return None, (r.stderr or "")[-300:]
     return salida, None
 
-def pensar(texto, voz=False):
+def pensar(texto, voz=False, origen="personal"):
+    """origen: 'personal' (voz, ⌃⌥Espacio, terminal) o 'auto' (resumen matutino). Nunca se mezclan."""
+    origen = origen if origen in sesiones.ORIGENES else "personal"
     estado("pensando", texto)
-    resp, err = claude(texto, voz)
+    resp, err = claude(texto, voz, origen)
     cerebro = "claude"
     tm.ruta("claude")
     if resp is None:
         log(f"Claude no respondió ({err}); paso a ChatGPT")
-        resp, err2 = codex(texto, voz)
+        sesiones.olvidar(origen)        # la sesión de Claude no verá este turno: la próxima empieza limpia
+        resp, err2 = codex(texto, voz, origen)
         cerebro = "chatgpt"
         tm.ruta("codex")
         if resp is None:
@@ -152,7 +176,7 @@ def pensar(texto, voz=False):
                     "Los comandos rápidos siguen funcionando.")
             cerebro = "ninguno"
             tm.ruta("ninguno")
-    _guardar(texto, resp, cerebro)
+    _guardar(texto, resp, cerebro, origen)
     estado("listo")
     return resp, cerebro
 

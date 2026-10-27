@@ -61,10 +61,13 @@ def resumen(hablar=True):
     texto = None
     try:
         from pensar import pensar
+        import telemetria as tm
+        if not tm.activa():
+            tm.nueva("auto")
         prompt = ("Genera mi resumen matutino como Jarvis, para decirse en voz alta: máximo 5 frases, "
                   "sin markdown ni listas, con tu humor seco. Termina con una frase de impulso hacia la meta "
                   "del coche. Datos de hoy (JSON): " + json.dumps(d, ensure_ascii=False, default=str))
-        resp, cerebro = pensar(prompt)
+        resp, cerebro = pensar(prompt, origen="auto")   # sesión propia: no contamina la plática
         if cerebro != "ninguno":
             texto = resp.strip()
     except Exception as e:

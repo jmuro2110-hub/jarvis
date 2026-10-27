@@ -173,13 +173,14 @@ def voz_empieza():
         pass
 
 
-def desglose_claude(sub_ms, duration_ms, duration_api_ms):
-    """Lo que Claude reporta de sí mismo + la diferencia con el subproceso (arranque local estimado)."""
+def desglose_claude(sub_ms, duration_ms, duration_api_ms, reanudada=False):
+    """Lo que Claude reporta de sí mismo + la diferencia con el subproceso (arranque local estimado).
+    Al reanudar, duration_api_ms viene ACUMULADO de toda la sesión (medido en 2.1.311): no se registra."""
     try:
         if isinstance(duration_ms, (int, float)) and duration_ms >= 0:
             registrar("claude_duracion", duration_ms)
             registrar("claude_arranque_est", max(0.0, sub_ms - duration_ms))
-        if isinstance(duration_api_ms, (int, float)) and duration_api_ms >= 0:
+        if not reanudada and isinstance(duration_api_ms, (int, float)) and duration_api_ms >= 0:
             registrar("claude_api", duration_api_ms)
     except Exception:
         pass

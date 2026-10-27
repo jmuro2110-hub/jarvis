@@ -15,6 +15,7 @@ import politica                   # noqa: E402
 import guardia                    # noqa: E402
 import pensar as pensar_mod       # noqa: E402
 import comun                      # noqa: E402
+import sesiones                   # noqa: E402
 import jarvis_voz as voz          # noqa: E402
 
 
@@ -284,16 +285,18 @@ class G_Cerebros(Base):
         llamadas = []
         with mock.patch.object(pensar_mod, "subprocess", self.run_falso(llamadas, claude_ok)), \
              mock.patch.object(pensar_mod, "buscar_codex", return_value="/falso/codex"), \
-             mock.patch.object(pensar_mod, "_continuar", return_value=True), \
+             tempfile.TemporaryDirectory() as d, mock.patch.object(sesiones, "DIR", pathlib.Path(d)), \
              mock.patch.object(pensar_mod, "estado"), mock.patch.object(pensar_mod, "log"), \
              mock.patch.object(pensar_mod, "_guardar"):
-            pensar_mod.pensar("hola", voz=True)
+            sesiones.guardar("personal", "44444444-4444-4444-8444-444444444444", nueva=True)
+            pensar_mod.pensar("hola", voz=True)                  # reanudando: los candados siguen
         return llamadas
 
     def test_claude_en_modo_asistente(self):
         (cmd, kw), = self.pensar(claude_ok=True)
-        for f in ("--restricted", "--strict-mcp-config", "--continue"):
+        for f in ("--restricted", "--strict-mcp-config", "--resume"):
             self.assertIn(f, cmd)
+        self.assertNotIn("--continue", cmd)
         self.assertEqual(cmd[cmd.index("--permission-mode") + 1], "dontAsk")
         self.assertEqual(pathlib.Path(cmd[cmd.index("--settings") + 1]), RAIZ / "seguridad/claude_asistente.json")
         self.assertNotIn("mcp__", cmd[cmd.index("--tools") + 1])

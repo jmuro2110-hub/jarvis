@@ -21,13 +21,13 @@ def fila(nombre, valores):
     n = len(v)
     p50 = _f(percentil(v, 50)) if n >= MIN_P50 else "—"
     p90 = _f(percentil(v, 90)) if n >= MIN_P90 else "—"
-    return f"  {nombre:<22}{n:>4}  {p50:>9}  {p90:>9}  {_f(v[0]):>9}  {_f(v[-1]):>9}"
+    return f"  {nombre:<32}{n:>4}  {p50:>9}  {p90:>9}  {_f(v[0]):>9}  {_f(v[-1]):>9}"
 
 def tabla(titulo, grupos):
     print(f"\n{titulo}")
     if not grupos:
         print("  (sin muestras)"); return
-    print(f"  {'':<22}{'n':>4}  {'p50':>9}  {'p90':>9}  {'mín':>9}  {'máx':>9}")
+    print(f"  {'':<32}{'n':>4}  {'p50':>9}  {'p90':>9}  {'mín':>9}  {'máx':>9}")
     for nombre, valores in grupos:
         print(fila(nombre, valores))
 
@@ -43,7 +43,8 @@ def main():
         try: dias = float(sys.argv[sys.argv.index("--dias") + 1])
         except (IndexError, ValueError):
             print("Uso: jv latencia [--dias N]"); sys.exit(1)
-    filas = tm.leer(dias)
+    filas = [f for f in tm.leer(dias)             # claude_api reanudada = acumulado de sesión, no sirve
+             if not (f["etapa"] == "claude_api" and f.get("sesion") == "reanudada")]
     periodo = f"últimos {dias:g} días" if dias else "todo el historial"
     if not filas:
         print(f"Sin mediciones todavía ({periodo}) en {tm.ARCHIVO}.\n"
@@ -77,6 +78,7 @@ def main():
     print("\nNotas: 'claude_p' y 'codex_exec' son el subproceso completo (arranque + red + modelo + salida)."
           "\n'claude_duracion' y 'claude_api' los reporta Claude en su JSON; 'claude_arranque_est' ="
           "\nclaude_p − claude_duracion es una ESTIMACIÓN del arranque local, no una medida exacta."
+          "\n'claude_api' solo en sesiones nuevas (al reanudar, Claude lo da acumulado)."
           "\nTiempo a primer texto: todavía no medible (requiere stream-json, upgrade 04)."
           "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido.")
 
