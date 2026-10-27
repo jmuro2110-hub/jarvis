@@ -21,6 +21,9 @@ DEFAULTS = {
     "timeout_seguimiento_seg": 15,
     "max_turnos": 5,
     "duracion_maxima_seg": 180,
+    "claude_streaming": True,           # upgrade 05: false = ruta JSON exacta del 04 (no cambia permisos)
+    "voz_anticipada": True,             # false = stream con telemetría, pero habla al final como antes
+    "timeout_orden_seg": 6,             # tras «Jarvis» solo: cuánto esperar la orden
 }
 
 def path_env():

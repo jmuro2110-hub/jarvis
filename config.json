@@ -13,5 +13,8 @@
   "conversacion_continua": true,
   "timeout_seguimiento_seg": 15,
   "max_turnos": 5,
-  "duracion_maxima_seg": 180
+  "duracion_maxima_seg": 180,
+  "claude_streaming": true,
+  "voz_anticipada": true,
+  "timeout_orden_seg": 6
 }

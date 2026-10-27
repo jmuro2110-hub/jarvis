@@ -121,7 +121,7 @@ class Base(unittest.TestCase):
         self.reloj.t += 1
         return self.decir_ok
 
-    def _pensar(self, texto, voz=False, origen="personal"):
+    def _pensar(self, texto, voz=False, origen="personal", **kw):     # upgrade 05: hablador, sin_herramientas
         self.bit.append("pensar"); self.pensado.append((texto, origen))
         self.reloj.t += 2
         return f"Respuesta a: {texto}", "claude"
@@ -211,6 +211,7 @@ class T06_ContextoClaude(Base):
         m = mock.MagicMock(); m.run.side_effect = run; m.DEVNULL = subprocess.DEVNULL
         m.TimeoutExpired = subprocess.TimeoutExpired
         with mock.patch.object(voz, "pensar", pensar_mod.pensar), \
+             mock.patch.object(pensar_mod, "config", return_value={"claude_streaming": False}), \
              mock.patch.object(pensar_mod, "subprocess", m), mock.patch.object(pensar_mod, "estado"), \
              mock.patch.object(pensar_mod, "log"), mock.patch.object(pensar_mod, "_guardar"), \
              mock.patch.object(sesiones, "DIR", self.casa):
@@ -429,6 +430,7 @@ class T20_Sensibles(Base):
                                                                    "is_error": False, "session_id": sid}), "")
         m = mock.MagicMock(); m.run.side_effect = run; m.DEVNULL = subprocess.DEVNULL
         with mock.patch.object(voz, "pensar", pensar_mod.pensar), \
+             mock.patch.object(pensar_mod, "config", return_value={"claude_streaming": False}), \
              mock.patch.object(pensar_mod, "subprocess", m), mock.patch.object(pensar_mod, "estado"), \
              mock.patch.object(pensar_mod, "log"), mock.patch.object(pensar_mod, "_guardar"), \
              mock.patch.object(sesiones, "DIR", self.casa):

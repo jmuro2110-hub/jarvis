@@ -99,6 +99,16 @@ def main():
     por_sesion = agrupar(desglose, lambda f: f"{f['etapa']} · {f.get('sesion') or '?'}")
     tabla("Claude por sesión (nueva / reanudada):", sorted(por_sesion.items()))
 
+    conv_stream = [f for f in filas if f["etapa"] == "claude_p" and "anticipada" in f]
+    if conv_stream:
+        n = sum(f["anticipada"] for f in conv_stream)
+        motivos = {}
+        for f in conv_stream:
+            if not f["anticipada"] and f.get("motivo"):
+                motivos[f["motivo"]] = motivos.get(f["motivo"], 0) + 1
+        print(f"\nVoz anticipada (stream-json): {n} de {len(conv_stream)} turnos "
+              f"({n / len(conv_stream) * 100:.0f}%)" + ("; sin anticipar por: " + ", ".join(
+                  f"{m} {c}" for m, c in sorted(motivos.items(), key=lambda x: -x[1])) if motivos else ""))
     conversaciones(dias)
 
     poco = sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
@@ -109,7 +119,9 @@ def main():
           "\n'claude_duracion' y 'claude_api' los reporta Claude en su JSON; 'claude_arranque_est' ="
           "\nclaude_p − claude_duracion es una ESTIMACIÓN del arranque local, no una medida exacta."
           "\n'claude_api' solo en sesiones nuevas (al reanudar, Claude lo da acumulado)."
-          "\nTiempo a primer texto: todavía no medible (requiere stream-json, upgrade 04)."
+          "\nStream (upgrade 05): claude_primer_texto / claude_primera_frase / tts_inicio / claude_resultado"
+          "\ncuentan desde que se lanzó claude; respuesta_completa desde que JP terminó de hablar."
+          "\ntts_inicio en voz anticipada = se lanzó el hijo de voz (el `say` real arranca ~0.1–0.3 s después)."
           "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido.")
 
 if __name__ == "__main__":

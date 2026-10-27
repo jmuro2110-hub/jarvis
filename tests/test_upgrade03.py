@@ -266,7 +266,7 @@ class T06_DesarrolloAislado(Sesiones):
 
     def test_voz_y_hud_usan_origen_personal(self):
         voz_src = (RAIZ / "voz/jarvis_voz.py").read_text()
-        self.assertIn("pensar(texto, voz=True)", voz_src)               # sin origen = personal
+        self.assertIn("pensar(texto, voz=True, hablador=", voz_src)     # sin origen = personal (upgrade 05: + hablador)
         self.assertIn('"pensar", texto, "--hablar"', (RAIZ / "hammerspoon/init.lua").read_text())
         import inspect
         codigo = inspect.getsource(pensar_mod._claude_una) + inspect.getsource(pensar_mod.claude)

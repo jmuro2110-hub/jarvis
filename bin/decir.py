@@ -90,4 +90,5 @@ if __name__ == "__main__":
     else:
         if os.environ.get("JARVIS_REQ_ID"):
             tm.desde_entorno(con_total=False)   # lo llamó Claude/otro proceso dentro de una petición
-        decir(" ".join(sys.argv[1:]) or "Sistemas en línea, señor.")
+        ok = decir(" ".join(sys.argv[1:]) or "Sistemas en línea, señor.")
+        sys.exit(0 if ok is not False else 1)     # el hijo de voz anticipada (upgrade 05) sabe si falló

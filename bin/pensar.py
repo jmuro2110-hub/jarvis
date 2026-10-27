@@ -4,9 +4,10 @@
 """Cerebro de Jarvis: Claude primero; si topa límite o falla, ChatGPT (Codex)."""
 import json, os, re, shutil, subprocess, sys, tempfile, time, pathlib, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from comun import JARVIS, CASA, log, estado
+from comun import JARVIS, CASA, log, estado, config
 import telemetria as tm
 import sesiones
+import streaming
 
 INSTRUCCION_VOZ = (
     "Te están hablando por voz. Responde en el idioma en que te hablaron. "
@@ -83,17 +84,35 @@ def _leer_json(salida):
     except ValueError:
         return None
 
-def _claude_una(texto, voz, reanudar):
+def asistente_sin_herramientas():
+    """Los mismos candados, pero --tools "" (se REEMPLAZA el valor, sin duplicar la bandera)."""
+    a = list(ASISTENTE_CLAUDE)
+    a[a.index("--tools") + 1] = ""
+    return a
+
+class Flujo:
+    """Stream-json solo para el ciclo de voz (upgrade 05). anticipar = puede hablar antes del resultado."""
+    def __init__(self, hablador, anticipar, motivo=None):
+        self.hablador, self.anticipar = hablador, anticipar
+        self.motivo = motivo         # por qué no se anticipa de entrada: con_tools / desactivado
+        self.corrida = None
+
+def _claude_una(texto, voz, reanudar, flujo=None):
     """Una llamada a claude -p. reanudar = ID exacto (--resume) o None (sesión nueva con --session-id).
     Devuelve (respuesta, error, session_id devuelto)."""
     t_prep = tm.ahora()
-    cmd = ["claude", "-p", texto, "--output-format", "json"]
+    cmd = ["claude", "-p", texto]
+    cmd += (["--output-format", "stream-json", "--verbose", "--include-partial-messages"] if flujo
+            else ["--output-format", "json"])
     cmd += ["--resume", reanudar] if reanudar else ["--session-id", sesiones.nuevo_id()]
     if voz:
         cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
-    cmd += ASISTENTE_CLAUDE                       # candados del upgrade 02 en CADA llamada, también al reanudar
+    # candados del upgrade 02 en CADA llamada, también al reanudar; la ruta sin herramientas solo vacía --tools
+    cmd += asistente_sin_herramientas() if flujo and flujo.anticipar else ASISTENTE_CLAUDE
     tm.sesion("reanudada" if reanudar else "nueva")
     tm.registrar("claude_preparacion", tm._ms(t_prep))
+    if flujo:
+        return _claude_stream(cmd, reanudar, flujo)
     with tm.etapa("claude_p", ruta="claude") as e:      # proceso completo: arranque + API + salida
         t0 = tm.ahora()
         try:
@@ -115,16 +134,47 @@ def _claude_una(texto, voz, reanudar):
             return None, (res or salida or err)[:300], None
     return res, None, d.get("session_id")
 
-def claude(texto, voz, origen="personal"):
+def _claude_stream(cmd, reanudar, flujo):
+    """stream-json: misma interfaz que la ruta JSON. `result` es la fuente de la respuesta completa."""
+    with tm.etapa("claude_p", ruta="claude") as e:
+        c = streaming.correr(cmd, flujo.hablador, flujo.anticipar, cwd=JARVIS, env=entorno_asistente())
+        flujo.corrida = c
+        e.extra = {"anticipada": c.anticipada}
+        if not c.anticipada:
+            e.extra["motivo"] = c.motivo or flujo.motivo or "sin_frase"
+        for clave, etapa in (("primer_evento", "claude_primer_evento"), ("primer_texto", "claude_primer_texto"),
+                             ("primera_frase", "claude_primera_frase"), ("resultado", "claude_resultado"),
+                             ("voz_inicio", "tts_inicio")):
+            if clave in c.t:
+                tm.registrar(etapa, c.t[clave])
+        if c.anticipada and "voz_inicio" in c.t and "resultado" in c.t and c.t["resultado"] > c.t["voz_inicio"]:
+            tm.registrar("voz_solapada", c.t["resultado"] - c.t["voz_inicio"])
+        if c.incidente:
+            tm.registrar("incidente_voz", 0, estado="error", extra={"motivo": c.incidente})
+        d = c.result if isinstance(c.result, dict) else None
+        if d is not None:
+            tm.desglose_claude(c.t.get("fin", 0), d.get("duration_ms"), d.get("duration_api_ms"), bool(reanudar))
+        if c.error == "timeout":
+            e.estado = "timeout"
+            return None, "tardó demasiado", None
+        res = (d.get("result") or "").strip() if d and isinstance(d.get("result"), str) else ""
+        if c.rc != 0 or c.error or d is None or d.get("is_error") or not res \
+                or (LIMITE_RE.search(res) and len(res) < 400):
+            e.estado = "error"
+            return None, (res or c.stderr.strip() or "stream incompleto")[:300], None
+    return res, None, d.get("session_id")
+
+def claude(texto, voz, origen="personal", flujo=None):
     if not shutil.which("claude"):
         return None, "no instalado"
     with sesiones.turno(origen):                  # serializa por origen: nadie pisa el mismo ID
         sid = sesiones.vigente(origen)
-        res, err, devuelto = _claude_una(texto, voz, sid)
-        if res is None and sid and NO_EXISTE_RE.search(err or ""):
+        res, err, devuelto = _claude_una(texto, voz, sid, flujo)
+        nada_paso = not flujo or (not flujo.hablador.hablo and not (flujo.corrida and flujo.corrida.tool_use))
+        if res is None and sid and NO_EXISTE_RE.search(err or "") and nada_paso:
             log("la sesión del asistente ya no existe; empiezo otra (sin --continue)")
             sid = None
-            res, err, devuelto = _claude_una(texto, voz, None)
+            res, err, devuelto = _claude_una(texto, voz, None, flujo)
         if res is not None:
             if sid and devuelto != sid:
                 log("Claude devolvió otro session_id al reanudar; guardo el devuelto")
@@ -213,14 +263,32 @@ def codex(texto, voz, origen="personal"):
             return None, (r.stderr or "")[-300:]
     return salida, None
 
-def pensar(texto, voz=False, origen="personal"):
-    """origen: 'personal' (voz, ⌃⌥Espacio, terminal) o 'auto' (resumen matutino). Nunca se mezclan."""
+INCOMPLETA = "Señor, la respuesta quedó incompleta."
+
+def pensar(texto, voz=False, origen="personal", hablador=None, sin_herramientas=False):
+    """origen: 'personal' (voz, ⌃⌥Espacio, terminal) o 'auto' (resumen matutino). Nunca se mezclan.
+    hablador/sin_herramientas: solo el ciclo de voz (upgrade 05). Con hablador se usa stream-json y, si la
+    pregunta va por la ruta sin herramientas, se puede hablar la primera línea antes del resultado."""
     origen = origen if origen in sesiones.ORIGENES else "personal"
     estado("pensando", texto)
-    resp, err = claude(texto, voz, origen)
+    flujo = None
+    if hablador is not None:
+        c = config()
+        if c.get("claude_streaming", True):
+            activa = bool(c.get("voz_anticipada", True))
+            flujo = Flujo(hablador, activa and sin_herramientas,
+                          None if activa and sin_herramientas else ("desactivado" if not activa else "con_tools"))
+    resp, err = claude(texto, voz, origen, flujo) if flujo else claude(texto, voz, origen)
     cerebro = "claude"
     tm.ruta("claude")
-    if resp is None:
+    if resp is None and flujo and (hablador.hablo or (flujo.corrida and flujo.corrida.tool_use)):
+        # Ya sonó algo o Claude usó herramientas: ni Codex ni reintento (no se repiten acciones).
+        log(f"Claude falló tras hablar o usar herramientas ({(err or '')[:80]}); respuesta incompleta")
+        sesiones.olvidar(origen)
+        hablador.incompleta = True
+        resp, cerebro = INCOMPLETA, "ninguno"
+        tm.ruta("ninguno")
+    elif resp is None:
         log(f"Claude no respondió ({err}); paso a ChatGPT")
         sesiones.olvidar(origen)        # la sesión de Claude no verá este turno: la próxima empieza limpia
         resp, err2 = codex(texto, voz, origen)
@@ -236,8 +304,9 @@ def pensar(texto, voz=False, origen="personal"):
                         "Los comandos rápidos siguen funcionando.")
             cerebro = "ninguno"
             tm.ruta("ninguno")
-    _guardar(texto, resp, cerebro, origen)
-    estado("listo")
+    _guardar(texto, resp, cerebro, origen)          # una sola vez, con el texto de `result`
+    if not (hablador is not None and hablador.activo()):
+        estado("listo")                             # si la voz anticipada sigue sonando, ella lo pone al final
     return resp, cerebro
 
 def primera_linea(resp):

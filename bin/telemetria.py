@@ -21,7 +21,15 @@ ARCHIVO = pathlib.Path(os.environ.get("JARVIS_METRICAS")
 ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion_groq",
           "transcripcion_local", "comando_rapido", "claude_preparacion", "claude_p",
           "claude_duracion", "claude_api", "claude_arranque_est", "codex_exec",
-          "voz_preparacion", "total")
+          "voz_preparacion", "total",
+          # upgrade 05 (stream-json). Desde que se lanzó claude: primer evento, primer texto, primera frase,
+          # comienzo de la voz (B), resultado (D) y fin de la voz. Desde el fin de la frase de JP:
+          # respuesta_completa (E). voz_solapada (F) = cuánto antes del resultado empezó a hablar.
+          "claude_primer_evento", "claude_primer_texto", "claude_primera_frase", "claude_resultado",
+          "tts_inicio", "tts_fin", "voz_solapada", "respuesta_completa", "incidente_voz")
+# Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
+MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
+                  "no_voz", "markdown", "distinto")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")
@@ -107,7 +115,7 @@ def terminar():
         pass
 
 
-def registrar(nombre, ms, ruta=None, estado="exito"):
+def registrar(nombre, ms, ruta=None, estado="exito", extra=None):
     """Escribe una línea. Solo campos fijos y valores de listas cerradas: nada de contenido."""
     try:
         id_ = _actual.get("id") or os.environ.get("JARVIS_REQ_ID")
@@ -122,6 +130,11 @@ def registrar(nombre, ms, ruta=None, estado="exito"):
                 "estado": estado if estado in ESTADOS else "error"}
         if nombre.startswith("claude_") and _actual.get("sesion") in SESIONES:
             fila["sesion"] = _actual["sesion"]
+        for k, v in (extra or {}).items():                  # upgrade 05: solo estos, con valores cerrados
+            if k == "anticipada" and isinstance(v, bool):
+                fila[k] = v
+            elif k == "motivo" and v in MOTIVOS_STREAM:
+                fila[k] = v
         ARCHIVO.parent.mkdir(parents=True, exist_ok=True)
         with open(ARCHIVO, "a") as f:
             f.write(json.dumps(fila) + "\n")
@@ -132,6 +145,7 @@ def registrar(nombre, ms, ruta=None, estado="exito"):
 class _Etapa:
     estado = "exito"
     ruta = None
+    extra = None
 
 
 @contextlib.contextmanager
@@ -146,7 +160,16 @@ def etapa(nombre, ruta=None):
         e.estado = "error"
         raise
     finally:
-        registrar(nombre, _ms(t0), e.ruta, e.estado)
+        registrar(nombre, _ms(t0), e.ruta, e.estado, e.extra)
+
+
+def desde_fin(nombre):
+    """Etapa medida desde que JP terminó su frase (p. ej. respuesta_completa)."""
+    try:
+        if _actual.get("t_fin"):
+            registrar(nombre, _ms(_actual["t_fin"]))
+    except Exception:
+        pass
 
 
 def total(estado="exito"):

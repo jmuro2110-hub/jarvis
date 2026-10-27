@@ -19,3 +19,12 @@
 - HUD: anillo verde pequeño y sin texto = esperando seguimiento (se oculta solo a los timeout + 2 s).
 - ⌃⌥Espacio (texto) no abre ni toca la conversación de voz.
 - Telemetría: `~/.jarvis/conversaciones.jsonl` (un evento por transición, sin texto ni audio); resumen en `jv latencia`. Pruebas: `tests/test_conversacion.py`.
+
+## Stream y voz anticipada (upgrade 05)
+- En el ciclo de voz, `claude -p` corre con `--output-format stream-json --verbose --include-partial-messages` (`bin/streaming.py`). El evento `result` es la respuesta autoritativa (historial, pantalla).
+- **Voz anticipada** solo si: (1) la frase es de conocimiento general según un clasificador determinista (`ruta_sin_herramientas`: qué es, explícame, dime tres…, y nada de acciones, datos personales ni tiempo actual; en seguimiento, solo si el turno anterior también lo fue), (2) esa ruta corre con `--tools ""` (mismos candados del 02), (3) el `init` del stream reporta cero herramientas y cero MCP, y (4) no aparece ningún `tool_use`. Si no, se espera el resultado y se habla como antes.
+- Se habla solo la PRIMERA LÍNEA: la frase 1 en cuanto cierra con un límite confiable (no corta en Sr., p. ej., 3.14, URLs, Markdown), luego el resto de la línea. Voz en proceso hijo (`bin/decir.py`: voz.lock, Juan, ⌃⌥. la calla), una a la vez; Claude sigue generando mientras. La ventana de seguimiento se abre solo cuando Claude terminó Y la voz terminó.
+- Si ya sonó algo y Claude falla: "Señor, la respuesta quedó incompleta." — sin Codex y sin reintentar. Si no sonó nada: Codex aislado como siempre.
+- **Tras «Jarvis» solo:** ese audio ya no va a Groq y la cola no se vacía, así que la orden que JP empezó durante el tin se conserva. Espera de la orden: `timeout_orden_seg` (6 s). ⌃⌥J sigue vaciando.
+- Config (sin reiniciar): `claude_streaming` (false = ruta JSON del 04), `voz_anticipada` (false = stream solo para medir), `timeout_orden_seg`. Ninguna cambia permisos.
+- Telemetría: claude_primer_texto, claude_primera_frase, tts_inicio, claude_resultado (desde que se lanzó claude), respuesta_completa (desde que JP terminó), voz_solapada; `jv latencia` da el % de turnos con voz anticipada. Pruebas: `tests/test_streaming.py`.

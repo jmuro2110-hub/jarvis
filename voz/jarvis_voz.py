@@ -24,6 +24,7 @@ from pensar import pensar, primera_linea                      # noqa: E402
 from modo import modo, disponibles                            # noqa: E402
 import telemetria as tm                                       # noqa: E402
 from conversacion import Conversacion, PROCESSING, es_cierre  # noqa: E402
+from streaming import Hablador, ruta_sin_herramientas         # noqa: E402
 
 SENSIBILIDAD = float(os.environ.get("JARVIS_SENSIBILIDAD", "3.0"))  # más alto = necesita voz más fuerte
 MIC = os.environ.get("JARVIS_MIC")
@@ -167,6 +168,8 @@ def procesar(texto, conv=None, seguimiento=False):
             e.ruta, e.estado = None, "fallback"       # no era comando rápido: pasa al cerebro
     if rapida is not None:
         tm.ruta("rapido")
+        if conv:
+            conv.previo_sin_herramientas = False
         print(f"🤖 Jarvis: {rapida or '(hecho)'}")
         log(f"rápido: {texto} → {rapida}")
         if rapida and not cerrar_pedido():
@@ -175,12 +178,43 @@ def procesar(texto, conv=None, seguimiento=False):
             tm.total()                                # acción sin voz: la respuesta es hacerla
         estado("listo"); return categoria
     subprocess.Popen(["afplay", "/System/Library/Sounds/Pop.aiff"])
-    resp, cerebro = pensar(texto, voz=True)          # sesión personal del upgrade 03 (--resume)
-    (CASA / "ultima_respuesta.txt").write_text(resp)
-    print(f"🤖 Jarvis [{cerebro}]: {resp}\n")
-    if not cerrar_pedido():
-        _hablar(primera_linea(resp), conv)
+    # Upgrade 05: stream-json; si es pregunta de conocimiento general, ruta sin herramientas y la primera
+    # línea puede empezar a sonar antes de que Claude termine (voz en proceso hijo, una a la vez).
+    sin_herr = ruta_sin_herramientas(texto, seguimiento, bool(conv and conv.previo_sin_herramientas))
+    hablador = Hablador(cerrar_pedido=cerrar_pedido, al_empezar=lambda: _empezo_voz(conv))
+    try:
+        resp, cerebro = pensar(texto, voz=True, hablador=hablador, sin_herramientas=sin_herr)
+        (CASA / "ultima_respuesta.txt").write_text(resp)
+        print(f"🤖 Jarvis [{cerebro}]: {resp}\n")
+        if hablador.hablo:
+            if hablador.incompleta:
+                hablador.decir(resp)                  # "la respuesta quedó incompleta" (si no lo callaron)
+            elif not cerrar_pedido() and not hablador.finalizar(primera_linea(resp)):
+                tm.registrar("incidente_voz", 0, estado="error", extra={"motivo": "distinto"})
+            hablador.esperar()                        # la ventana no se abre con voz sonando
+            if hablador.t_fin and hablador.t0_claude:
+                tm.registrar("tts_fin", (hablador.t_fin - hablador.t0_claude) * 1000)
+            if hablador.error and not cerrar_pedido():
+                raise RuntimeError("la voz falló")    # igual que _hablar(): sin voz confiable no hay micrófono
+        elif not cerrar_pedido():
+            if hablador.t0_claude:                    # B en la ruta normal: se habla con el resultado
+                tm.registrar("tts_inicio", (time.perf_counter() - hablador.t0_claude) * 1000)
+            _hablar(primera_linea(resp), conv)
+    finally:
+        hablador.cancelar()                           # nunca queda un hijo de voz huérfano
+    tm.desde_fin("respuesta_completa")
+    if conv:
+        conv.previo_sin_herramientas = bool(sin_herr and cerebro == "claude")
+    estado("listo")
     return "cerebro"
+
+
+def _empezo_voz(conv):
+    """La voz anticipada arrancó: PROCESSING → SPEAKING mientras Claude sigue; el total (C) termina aquí."""
+    if conv and conv.estado == PROCESSING:
+        conv.hablar()
+    tm.total()
+
 
 
 def _hablar(texto, conv):
@@ -191,13 +225,17 @@ def _hablar(texto, conv):
         raise RuntimeError("la voz falló")            # sin voz confiable no se abre el micrófono
 
 
-def pedir_comando(oido, preciso):
-    """Solo dijo «Jarvis» o ⌃⌥J: tin y escucha la orden. Regresa el texto, o "" si no hubo nada."""
+def pedir_comando(oido, preciso, vaciar=True):
+    """Solo dijo «Jarvis» o ⌃⌥J: tin y escucha la orden. Regresa el texto, o "" si no hubo nada.
+    vaciar=False (upgrade 05) tras «Jarvis» hablado: lo que hay en la cola es lo que JP dijo DESPUÉS de
+    «Jarvis» (contiguo, sin voz de Jarvis en medio), así que no se tira. ⌃⌥J sí vacía, como siempre."""
     estado("escuchando")
-    subprocess.Popen(["afplay", "/System/Library/Sounds/Tink.aiff"])
+    subprocess.Popen(["afplay", "/System/Library/Sounds/Tink.aiff"])     # no se espera: la captura sigue
     print("👂 ¿Sí, señor?")
-    oido.vaciar()
-    audio = oido.frase(fin_silencio=1.3, max_dur=25, espera_inicio=10, cerrar=CERRAR)
+    if vaciar:
+        oido.vaciar()
+    espera = float(config().get("timeout_orden_seg", 6))
+    audio = oido.frase(fin_silencio=1.3, max_dur=25, espera_inicio=espera, cerrar=CERRAR)
     if audio is None or isinstance(audio, str):
         print("   (no escuché nada)"); estado("listo"); return ""
     if not tm.activa():
@@ -286,8 +324,9 @@ def esperar_seguimiento(oido, preciso, conv):
         return texto
 
 
-def conversar(oido, preciso, conv, orden=None):
-    """De la activación al cierre, en este mismo hilo. orden=None → hay que pedirla."""
+def conversar(oido, preciso, conv, orden=None, vaciar=True):
+    """De la activación al cierre, en este mismo hilo. orden=None → hay que pedirla
+    (vaciar=False: tras «Jarvis» hablado, sin tirar lo que JP ya empezó a decir)."""
     if conv.abierta:
         return                                        # ya había una abierta: nunca dos
     CERRAR.unlink(missing_ok=True)                    # una bandera vieja no cierra esta conversación
@@ -296,7 +335,7 @@ def conversar(oido, preciso, conv, orden=None):
     conv.max_turnos, conv.duracion_max = int(c["max_turnos"]), float(c["duracion_maxima_seg"])
     conv.activar()
     try:
-        texto = orden if orden is not None else pedir_comando(oido, preciso)
+        texto = orden if orden is not None else pedir_comando(oido, preciso, vaciar)
         if not texto or not texto.strip():
             conv.cerrar("sin_orden"); return
         if es_cierre(texto):
@@ -322,6 +361,18 @@ def conversar(oido, preciso, conv, orden=None):
         estado("listo")
 
 
+SOLO_JARVIS_SEG = 1.5      # voz (sin silencios) hasta la cual un «Jarvis» sin orden se trata como solo «Jarvis»
+
+
+def voz_seg(oido):
+    """Segundos con voz de la última frase (del primer al último pedazo con voz). Desconocido = largo."""
+    try:
+        t_voz, t_ultima, _ = oido.ultima
+        return (t_ultima - t_voz) / 1e9
+    except Exception:
+        return 99.0
+
+
 def escuchar_una(oido, rapido, preciso, conv):
     """IDLE: una frase. Solo «Jarvis» (Whisper base, local) o ⌃⌥J abren conversación; nada va a Groq antes."""
     audio = oido.frase(disparador=DISPARADOR)
@@ -331,12 +382,17 @@ def escuchar_una(oido, rapido, preciso, conv):
         else:
             t0 = tm.ahora()
             borrador = transcribir(rapido, audio, IDIOMA)
-            activado, _ = separar(borrador)
+            activado, orden_borrador = separar(borrador)
             if not activado:
                 return
             tm.nueva("voz")
             tm.registrar("deteccion_jarvis", (tm.ahora() - t0) / 1e6)
             medir_frase(oido)
+            if not orden_borrador and voz_seg(oido) <= SOLO_JARVIS_SEG:
+                # Solo «Jarvis» (upgrade 05): no se manda a Groq (eso tardaba 1–3 s mientras JP ya hablaba)
+                # y no se vacía la cola: la orden que ya empezó se conserva completa.
+                conversar(oido, preciso, conv, None, vaciar=False)
+                return
             estado("pensando", "transcribiendo…")
             texto = oir_bien(audio, preciso) or borrador
             activado2, orden = separar(texto)
