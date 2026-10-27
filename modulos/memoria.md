@@ -33,6 +33,7 @@ Escritura: candado `fcntl` (`recuerdos.lock`), `O_APPEND` y `fsync`. Se confirma
 - «Olvida ese recuerdo / olvida que …» → «Listo, señor, ya no lo uso. Sigue en el archivo, desactivado.»
 - «¿Qué recuerdas de/sobre …?» → hasta 3, del ámbito correcto.
 - El llamado puede venir mal transcrito: «Jardis», «Yarvis», «Travis»… (lista conocida o parecido ≥0.7 con «jarvis»). Se quitan hasta 3 palabras iniciales de llamado o relleno, así que la intención se busca en las primeras 3 palabras, nunca a media frase («mi mamá recuerda que…» no cuenta). «recuerda que» con pausa y sin contenido → «Dígamelo de corrido».
+- Las cuatro intenciones se comparan en minúsculas y sin acentos («corríge», «Olvídate», «QUÉ RECUERDAS»). El contenido se guarda con el texto original. Corregir acepta «corrige / cambia / actualiza ese (o el) recuerdo …» y «corrígelo: …».
 - **Red de seguridad:** con `memoria_inteligente` encendida, el asistente recibe `INSTRUCCION_MEMORIA`: si un «recuerda…» le llega a Claude, no lo escribe en `bitacora.md` ni en otro archivo y le pide a JP repetirlo empezando con «recuerda que». (En la prueba física, Groq oyó «Jardis» y Claude lo anotó en la bitácora.)
 - En la voz se revisa justo después de «cállate» y ANTES de Spotify y volumen. Así «recuerda que prefiero hacer una pausa cada hora» se guarda y no pausa la música. Solo cuenta si la frase EMPIEZA con la intención.
 - **«Recuérdame…» y «recuerda que mañana / el viernes / a las 5 / tarea / entrega / examen…» NO son recuerdos:** siguen el camino de siempre a `pendientes.md`.

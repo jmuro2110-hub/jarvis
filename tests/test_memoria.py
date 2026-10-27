@@ -703,6 +703,44 @@ class VariantesDelLlamado(Base):
         self.assertFalse(self.archivo.exists())
 
 
+class AcentosEnIntenciones(Base):
+    """Prueba física 07 (paso D): Groq escribió «corríge» y la corrección se fue a Claude."""
+    def test_corregir_variantes(self):
+        for t in ("corríge ese recuerdo. Ahora prefiero 50 minutos", "Corrígelo: ahora prefiero 50 minutos",
+                  "CORRIGE ESE RECUERDO, ahora prefiero 50 minutos", "Cambia el recuerdo: prefiero 50 minutos",
+                  "cambia ese recuerdo ahora prefiero 50 minutos", "Actualiza el recuerdo: ahora prefiero 50 minutos",
+                  "actualiza ese recuerdo ahora prefiero 50 minutos", "Jardis, corríge ese recuerdo: prefiero 50 minutos",
+                  "corrigelo, prefiero 50 minutos"):
+            self.assertEqual(mem.intencion(t), ("corregir", ("", "prefiero 50 minutos")), t)
+
+    def test_corrige_de_verdad_con_acento(self):
+        _, rid = mem.atender(f"recuerda que {ESTUDIO}", "voz")
+        r, nuevo = mem.atender("Jarvis, corríge ese recuerdo. Ahora prefiero 50 minutos", "voz", rid)
+        self.assertTrue(r.startswith("Corregido, señor: prefiero 50 minutos"), r)
+        self.assertEqual([x.rec.contenido for x in mem.buscar("¿cuánto deberían durar mis bloques de estudio?")],
+                         ["prefiero 50 minutos"])
+
+    def test_guardar_olvidar_consultar(self):
+        self.assertEqual(mem.intencion("RECUÉRDA QUE prefiero el té verde"), ("guardar", "prefiero el té verde"))
+        self.assertEqual(mem.intencion("Acuérdate de que prefiero el té verde"), ("guardar", "prefiero el té verde"))
+        self.assertEqual(mem.intencion("acuerdate que prefiero el té verde"), ("guardar", "prefiero el té verde"))
+        self.assertEqual(mem.intencion("Olvídate de que prefiero el té verde"), ("olvidar", "prefiero el té verde"))
+        self.assertEqual(mem.intencion("OLVIDA ESE RECUERDO"), ("olvidar", ""))
+        self.assertEqual(mem.intencion("¿QUÉ RECUERDAS SOBRE ESTUDIAR?"), ("consultar", "ESTUDIAR"))
+        self.assertEqual(mem.intencion("Que recuerdas de mis preferencias"), ("consultar", "mis preferencias"))
+        self.assertEqual(mem.intencion("¿Qué tienes guardado sobre el café?"), ("consultar", "el café"))
+
+    def test_contenido_con_sus_acentos(self):
+        self.assertEqual(mem.intencion("RECUERDA QUE prefiero la Biblioteca Pública en las tardes")[1],
+                         "prefiero la Biblioteca Pública en las tardes")
+        self.assertEqual(len(mem.plano("Ñandú İstanbul ¿qué?")), len("Ñandú İstanbul ¿qué?"))
+
+    def test_no_se_vuelve_glotona(self):
+        for t in ("cámbialo a modo oscuro", "corrige mi tarea de inglés", "cambia la canción", "actualiza el sistema",
+                  "corrígeme si me equivoco", "qué recuerdo tan bonito", "el recuerdo de mi abuelo"):
+            self.assertIsNone(mem.intencion(t), t)
+
+
 class RedDeSeguridadBitacora(Base):
     def test_instruccion_con_memoria(self):
         i = pensar_mod.instrucciones(True, "personal")

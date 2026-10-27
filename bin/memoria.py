@@ -153,17 +153,32 @@ def quitar_llamado(t):
     return t
 
 
-GUARDAR_RE = re.compile(r"^(?:recuerda|acu[eé]rdate(?:\s+de)?|guarda\s+en\s+tu\s+memoria|"
-                        r"apunta\s+en\s+tu\s+memoria)\s+que\b[\s,:]*(.*)$", re.I | re.S)
-CORREGIR_RE = re.compile(r"^(?:corrige|actualiza|cambia)\s+(?:ese|este|el|mi|tu)\s+(?:[uú]ltimo\s+)?recuerdo"
-                         r"(?:\s+(?:de|sobre)\s+(.+?))?\s*[:,.;—-]\s*(.+)$", re.I | re.S)
-CORREGIR_SIN_PAUSA_RE = re.compile(r"^(?:corrige|actualiza|cambia)\s+(?:ese|este|el|mi|tu)\s+(?:[uú]ltimo\s+)?"
-                                   r"recuerdo\s+()(.+)$", re.I | re.S)     # Groq sin coma: sin tema
-OLVIDAR_RE = re.compile(r"^(?:olvida|ol?v[ií]date\s+de|deja\s+de\s+(?:usar|recordar))\s+"
-                        r"(?:(?:ese|este|el|tu)\s+(?:[uú]ltimo\s+)?recuerdo(?:\s+(?:de|sobre)\s+(.+))?|que\s+(.+))$",
-                        re.I | re.S)
-CONSULTAR_RE = re.compile(r"^(?:qu[eé]|que)\s+(?:recuerdas|tienes\s+guardado|tienes\s+en\s+(?:tu\s+)?memoria|"
-                          r"hay\s+en\s+tu\s+memoria)(?:\s+(?:de|del|sobre|acerca\s+de)\s+(.+?))?\W*$", re.I | re.S)
+# Las intenciones se comparan en minúsculas y SIN acentos (Groq escribe «corríge», «Olvídate», «QUÉ»…) sobre
+# plano(t), que conserva la longitud: el contenido se recorta del texto ORIGINAL, con sus acentos.
+GUARDAR_RE = re.compile(r"^(?:recuerda|acuerdate(?:\s+de)?|guarda\s+en\s+tu\s+memoria|"
+                        r"apunta\s+en\s+tu\s+memoria)\s+que\b[\s,:]*(.*)$", re.S)
+# «corrige / cambia / actualiza ese (o el) recuerdo …» y «corrígelo: …» (lo = el recuerdo de la plática)
+_CORREGIR = (r"^(?:(?:corrige|cambia|actualiza)\s+(?:ese|este|el|mi|tu)\s+(?:ultimo\s+)?recuerdo"
+             r"(?:\s+(?:de|sobre)\s+(.+?))?|corrigelo())")
+CORREGIR_RE = re.compile(_CORREGIR + r"\s*[:,.;—-]\s*(.+)$", re.S)
+CORREGIR_SIN_PAUSA_RE = re.compile(r"^(?:(?:corrige|cambia|actualiza)\s+(?:ese|este|el|mi|tu)\s+(?:ultimo\s+)?"
+                                   r"recuerdo|corrigelo)\s+()()(.+)$", re.S)     # Groq sin coma: sin tema
+OLVIDAR_RE = re.compile(r"^(?:olvida|olvidate\s+de|deja\s+de\s+(?:usar|recordar))\s+"
+                        r"(?:(?:ese|este|el|tu)\s+(?:ultimo\s+)?recuerdo(?:\s+(?:de|sobre)\s+(.+))?|que\s+(.+))$",
+                        re.S)
+CONSULTAR_RE = re.compile(r"^que\s+(?:recuerdas|tienes\s+guardado|tienes\s+en\s+(?:tu\s+)?memoria|"
+                          r"hay\s+en\s+tu\s+memoria)(?:\s+(?:de|del|sobre|acerca\s+de)\s+(.+?))?\W*$", re.S)
+
+
+def plano(t):
+    """Minúsculas y sin acentos, CARÁCTER POR CARÁCTER (misma longitud que t, para recortar el original)."""
+    return "".join((unicodedata.normalize("NFD", c)[:1] or c).lower()[:1] or c for c in t)
+
+
+def _grupo(t, m, n):
+    return t[m.start(n):m.end(n)] if m.start(n) >= 0 else ""
+
+
 # «Recuerda que» con fecha, hora o tarea es un pendiente (camino de siempre, memoria/pendientes.md).
 DIAS = r"(lunes|martes|miercoles|jueves|viernes|sabado|domingo)"
 PENDIENTE_RE = re.compile(
@@ -178,23 +193,24 @@ def intencion(texto):
     """("guardar", contenido) · ("corregir", (tema, contenido)) · ("olvidar", tema) · ("consultar", tema)
     · None (no es de memoria: sigue el camino de siempre). Solo se llama sobre lo que dijo/escribió JP."""
     t = quitar_llamado(texto)
-    m = GUARDAR_RE.match(t)
+    p = plano(t)
+    m = GUARDAR_RE.match(p)
     if m:
-        contenido = limpiar(m.group(1))
+        contenido = limpiar(_grupo(t, m, 1))
         if PENDIENTE_RE.search(sin_acentos(contenido)):
             return None                                   # «recuerda que mañana…» = pendiente, como hoy
         return "guardar", contenido
-    m = CORREGIR_RE.match(t) or CORREGIR_SIN_PAUSA_RE.match(t)
+    m = CORREGIR_RE.match(p) or CORREGIR_SIN_PAUSA_RE.match(p)
     if m:
-        nuevo = re.sub(r"^(?:ahora|mejor|que|en realidad)\b[\s,]*", "", limpiar(m.group(2)), flags=re.I)
+        nuevo = re.sub(r"^(?:ahora|mejor|que|en realidad)\b[\s,]*", "", limpiar(_grupo(t, m, 3)), flags=re.I)
         nuevo = re.sub(r"^(?:ahora|que)\b[\s,]*", "", nuevo, flags=re.I)
-        return "corregir", (limpiar(m.group(1) or ""), limpiar(nuevo))
-    m = OLVIDAR_RE.match(t)
+        return "corregir", (limpiar(_grupo(t, m, 1)), limpiar(nuevo))
+    m = OLVIDAR_RE.match(p)
     if m:
-        return "olvidar", limpiar(m.group(1) or m.group(2) or "")
-    m = CONSULTAR_RE.match(t)
+        return "olvidar", limpiar(_grupo(t, m, 1) or _grupo(t, m, 2))
+    m = CONSULTAR_RE.match(p)
     if m:
-        return "consultar", limpiar(m.group(1) or "")
+        return "consultar", limpiar(_grupo(t, m, 1))
     return None
 
 
