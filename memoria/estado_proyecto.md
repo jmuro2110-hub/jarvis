@@ -50,7 +50,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - [ ] Subir Jarvis a GitHub privado (jmuro2110-hub/jarvis) para que ChatGPT lea el código real.
 
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
-1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Barge-in ✅ (upgrade 06, pendiente de prueba física).
+1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Barge-in ✅ (upgrade 06).
 2. **Velocidad**: medida, stdin resuelto (01/03) y stream-json con voz anticipada (05) ✅.
 3. **Memoria que aprende**: permanente vs reciente vs recuerdos relevantes.
 4. **Iniciativa con criterio**: prioridades, silencio, no repetir avisos, contexto (modo, pendientes).
@@ -58,9 +58,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 06 (barge-in, voz al result, contexto personal) implementado: 273 pruebas automáticas OK y benchmark real de voz al result. **Prueba física con JP: PENDIENTE** (bocinas/audífonos).
+- Upgrade 06 terminado (2026-10-27). Prueba física: A «Jarvis, cállate» calló la voz (≈1.6 s desde que JP empezó a hablar; Whisper 0.61 s) y cerró; B «Jarvis, espera» la calló (≈2.2 s) y siguió con contexto; C NO llegó a ser barge-in (la respuesta terminó antes de que JP hablara; la corrección entró como seguimiento y salió bien); D con música, con bocinas y con audífonos: cero falsas interrupciones; E voz al result 0.39–0.52 s antes de la salida de claude; F pendientes solo personales y técnico solo al preguntar por Jarvis; G cierre por tope de 5 turnos; H rollback correcto. Arreglados tras la prueba: «qué tengo? Pendiente» (puntuación de en medio) y la fila barge_tipo de «espera».
 - Siguiente: decidir el Upgrade 07 con ChatGPT. NO se empezó.
-- Límites abiertos: barge-in sin cancelación de eco (con bocinas puede no oír «Jarvis» encima de su propia voz o tardar); la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s (arranque en frío); la voz anticipada solo aplica a preguntas de conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
+- Límites abiertos: barge-in sin cancelación de eco y con piso de ruido propio: con música alta casi no hay candidatos (no interrumpe en falso, pero puede no oír a JP); callarlo tarda ~1.5–2.2 s; «no, mejor X» con la voz sonando solo está probado en automático; la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s; la voz anticipada solo aplica a preguntas de conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.

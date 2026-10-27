@@ -539,6 +539,15 @@ class T27_Limites(Base):
         self.assertEqual(self.cierre()[0], "turnos")
 
 
+class TelemetriaEspera(Base):
+    def test_barge_tipo_espera_se_registra(self):
+        """Prueba física B: «espera» no dejaba fila de barge_tipo (la petición ya estaba cerrada)."""
+        self.det["uno"] = det("espera")
+        self.correr("Jarvis, uno", ("calla", 15))
+        filas = [json.loads(l) for l in (self.casa / "metricas.jsonl").read_text().splitlines()]
+        self.assertIn("espera", [f.get("motivo") for f in filas if f["etapa"] == "barge_tipo"])
+
+
 class T28_Hud(Base):
     def test_estados(self):
         self.det["uno"] = det("espera")
@@ -760,6 +769,13 @@ class T37_41_51_Pendientes(Pendientes):
         self.escribir("- [ ] Tarea de historia | historia", "- [ ] Examen | matemáticas")
         txt, _ = self.r("qué tengo pendiente de historia")
         self.assertIn("Tarea de historia", txt); self.assertNotIn("Examen", txt)
+
+    def test_puntuacion_de_en_medio(self):
+        self.escribir("- [ ] Prueba | escuela")
+        for t in ("qué tengo? Pendiente", "Qué tengo, pendiente.", "¿Qué tengo?, ¿pendiente?",
+                  "qué tengo pendiente... de la escuela", "Jarvis, ¿mis pendientes?"):
+            self.assertEqual(self.r(t)[1], "pendientes", t)
+        self.assertEqual(self.r("qué tengo? Pendiente del desarrollo de Jarvis"), (None, None))
 
     def test_jarvis_va_al_cerebro(self):
         self.escribir("- [ ] Algo | personal")

@@ -69,7 +69,9 @@ PEND_TECNICO = re.compile(r"\b(jarvis|proyecto|desarrollo|upgrade|c[oó]digo|rep
 
 def pendientes_rapido(t):
     """«¿Qué tengo pendiente?» desde memoria/pendientes.md, sin Claude (upgrade 06). None = no es esto.
-    «…de Jarvis / del proyecto / del desarrollo» no entra: va al cerebro."""
+    «…de Jarvis / del proyecto / del desarrollo» no entra: va al cerebro.
+    La puntuación de en medio no cuenta: Groq a veces escribe «qué tengo? Pendiente»."""
+    t = re.sub(r"\s+", " ", re.sub(r"[¿?¡!,.;:…]+", " ", t)).strip()
     m = PEND_RE.match(t)
     if not m:
         return None
@@ -468,6 +470,7 @@ def conversar(oido, preciso, conv, orden=None, vaciar=True):
             tm.terminar()
             det, conv.interrupcion = conv.interrupcion, None
             if det is not None:                       # upgrade 06: le hablaron encima («Jarvis, …»)
+                tm.nueva("voz")                       # la intervención es su propia petición (telemetría)
                 accion, x = atender_interrupcion(oido, preciso, det)
                 tm.terminar()
                 if accion == "cerrar":
