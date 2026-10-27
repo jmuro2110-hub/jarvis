@@ -191,6 +191,9 @@ class D_Tolerancia(Base):
         self.assertEqual(len(tm.leer()), 1)
 
 
+MEMORIA = {"candidatos", "seleccionados", "usada"}                # upgrade 07: conteos de memoria_busqueda
+
+
 class E_Privacidad(Base):
     def test_no_guarda_contenido(self):
         secreto_p, secreto_r = "PREGUNTA_SECRETA_7731", "RESPUESTA_SECRETA_9912"
@@ -204,7 +207,7 @@ class E_Privacidad(Base):
         for s in (secreto_p, secreto_r, "gsk_SECRETA", "INSTRUCCION", "Te están hablando"):
             self.assertNotIn(s, texto)
         for f in self.filas():
-            self.assertEqual(set(f) - {"sesion"}, CAMPOS)                # upgrade 03: "sesion" en filas de Claude
+            self.assertEqual(set(f) - {"sesion"} - MEMORIA, CAMPOS)      # upgrade 03: "sesion" en filas de Claude
             self.assertIn(f.get("sesion", "nueva"), tm.SESIONES)
 
     def test_valores_fuera_de_lista_no_pasan(self):

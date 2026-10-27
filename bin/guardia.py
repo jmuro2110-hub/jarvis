@@ -26,7 +26,9 @@ CONTROLES = [JARVIS / ".claude", JARVIS / "seguridad", JARVIS / "bin", JARVIS / 
              HOME / ".codex", HOME / ".hammerspoon"]
 SECRETOS = [HOME / ".jarvis" / "secretos.env", HOME / ".jarvis" / "autorizaciones.json",
             HOME / ".codex" / "auth.json", HOME / ".claude" / ".credentials.json", HOME / ".ssh",
-            HOME / ".gnupg", HOME / "Library" / "Keychains", HOME / ".aws", HOME / ".config" / "gh"]
+            HOME / ".gnupg", HOME / "Library" / "Keychains", HOME / ".aws", HOME / ".config" / "gh",
+            # upgrade 07: los recuerdos entran a Claude solo por la búsqueda selectiva, nunca leyendo el archivo
+            HOME / ".jarvis" / "recuerdos.jsonl"]
 # Dónde se permite organizar (mkdir/mv/cp sin sobrescribir). Jarvis y sus datos quedan fuera.
 ORGANIZABLES = [HOME / d for d in ("Documents", "Desktop", "Downloads", "Pictures", "Movies", "Music")]
 PAPELERA = HOME / ".Trash"

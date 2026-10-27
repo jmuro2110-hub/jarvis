@@ -24,6 +24,7 @@ from decir import decir, callar                               # noqa: E402
 from pensar import pensar, primera_linea                      # noqa: E402
 from modo import modo, disponibles                            # noqa: E402
 import telemetria as tm                                       # noqa: E402
+import memoria                                                # noqa: E402
 from conversacion import Conversacion, PROCESSING, es_cierre  # noqa: E402
 from streaming import Hablador, ruta_sin_herramientas         # noqa: E402
 from interrupciones import Vigia, tipo_de, CALLAR_RE, ESPERA_RE  # noqa: E402
@@ -107,8 +108,10 @@ def pendientes_rapido(t):
     return voz + (f"; y {n - 3} más en pantalla." if n > 3 else ".")
 
 
-def clasificar_rapido(t, seguimiento=False, previo=None):
-    """(respuesta, categoría). respuesta None = no es comando rápido. En IDLE las reglas son las de siempre."""
+def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
+    """(respuesta, categoría). respuesta None = no es comando rápido. En IDLE las reglas son las de siempre.
+    ref = último recuerdo de la conversación («ese recuerdo», upgrade 07)."""
+    original = t
     t = t.lower().strip(" .,!¿?¡")
     t = re.sub(r"^(oye |hey )?jarvis[, ]*", "", t).strip(" .,!¿?¡")   # «Jarvis, ¿qué…?» sin el «¿» suelto
     c = config()
@@ -140,6 +143,9 @@ def clasificar_rapido(t, seguimiento=False, previo=None):
         return pend, "pendientes"
     if re.fullmatch(r"(qué hora es|la hora|dime la hora)", t):
         n = datetime.datetime.now(); return f"Son las {n.hour}:{n.minute:02d}, señor.", "hora"
+    mem = memoria.atender(original, "voz", ref)       # upgrade 07: memoria explícita, local, sin Claude
+    if mem is not None:
+        return mem[0], "memoria"
     m = re.search(r"\bmodo (\w+)", t)
     if m and re.search(r"\b(desactiva|quita|apaga|sal del|termina|cancela|ya no)\b", t):
         m = None        # "desactiva el modo gamer": no lo actives; que lo resuelva el cerebro
@@ -215,16 +221,20 @@ def procesar(texto, conv=None, seguimiento=False):
     Si se pidió callar mientras pensaba, no se habla la respuesta."""
     print(f"🗣  Tú: {texto}")
     previo = conv.previo if conv else None
+    memoria.ultimo = None                             # qué recuerdo toca/usa ESTE turno («ese recuerdo»)
     with tm.etapa("comando_rapido", ruta="rapido") as e:
-        rapida, categoria = clasificar_rapido(texto, seguimiento, previo)
+        rapida, categoria = clasificar_rapido(texto, seguimiento, previo,
+                                              conv.ultimo_recuerdo if conv else None)
         if rapida is None:
             e.ruta, e.estado = None, "fallback"       # no era comando rápido: pasa al cerebro
     if rapida is not None:
         tm.ruta("rapido")
         if conv:
             conv.previo_sin_herramientas = False
+            if memoria.ultimo:
+                conv.ultimo_recuerdo = memoria.ultimo
         print(f"🤖 Jarvis: {rapida or '(hecho)'}")
-        log(f"rápido: {texto} → {rapida}")
+        log("rápido: memoria" if categoria == "memoria" else f"rápido: {texto} → {rapida}")
         if rapida and not cerrar_pedido():
             _hablar(rapida, conv)
         else:
@@ -260,6 +270,8 @@ def procesar(texto, conv=None, seguimiento=False):
     tm.desde_fin("respuesta_completa")
     if conv:
         conv.previo_sin_herramientas = bool(sin_herr and cerebro == "claude")
+        if memoria.ultimo:                            # Claude usó un recuerdo: «ese recuerdo» es ese
+            conv.ultimo_recuerdo = memoria.ultimo
     estado("listo")                                   # tras cancelar, nada se queda en "hablando"
     return "cerebro"
 

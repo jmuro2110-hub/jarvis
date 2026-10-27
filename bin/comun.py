@@ -26,6 +26,7 @@ DEFAULTS = {
     "timeout_orden_seg": 6,             # tras «Jarvis» solo: cuánto esperar la orden
     "barge_in": True,                   # upgrade 06: «Jarvis, …» mientras habla lo interrumpe (false = 05)
     "hablar_al_result": True,           # upgrade 06: hablar al llegar `result`, sin esperar la salida de claude
+    "memoria_inteligente": True,        # upgrade 07: recuerdos explícitos (false = no guarda ni recupera)
 }
 
 def path_env():

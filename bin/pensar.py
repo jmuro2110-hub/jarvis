@@ -8,6 +8,7 @@ from comun import JARVIS, CASA, log, estado, config
 import telemetria as tm
 import sesiones
 import streaming
+import memoria
 
 INSTRUCCION_VOZ = (
     "Te están hablando por voz. Responde en el idioma en que te hablaron. "
@@ -183,9 +184,17 @@ def _claude_stream(cmd, reanudar, flujo):
         e.estado = "error"
         return None, (res or c.stderr.strip() or "stream incompleto")[:300], None
 
+def con_recuerdos(texto, origen):
+    """Upgrade 07: hasta 3 recuerdos relevantes como DATOS antes de la pregunta. Solo origen personal y solo
+    en la ruta de Claude: Codex, el historial y la ruta sin herramientas siguen con el texto ORIGINAL."""
+    if origen != "personal" or not config().get("memoria_inteligente", True):
+        return texto
+    return memoria.prompt_con_recuerdos(texto)
+
 def claude(texto, voz, origen="personal", flujo=None):
     if not shutil.which("claude"):
         return None, "no instalado"
+    texto = con_recuerdos(texto, origen)          # una búsqueda por pregunta, también si se reintenta
     with sesiones.turno(origen):                  # serializa por origen: nadie pisa el mismo ID
         sid = sesiones.vigente(origen)
         res, err, devuelto = _claude_una(texto, voz, sid, flujo, origen)
@@ -338,6 +347,18 @@ if __name__ == "__main__":
     if not texto:
         print("Uso: pensar.py \"pregunta\" [--hablar]"); sys.exit(1)
     tm.desde_entorno("texto")               # ⌃⌥Espacio / terminal: el total empieza aquí
+    # Upgrade 07: «recuerda que…» / «corrige ese recuerdo…» / «¿qué recuerdas de…?» se atienden aquí, en local,
+    # ANTES de Claude (entrada confiable de JP). Nunca dentro de pensar(): ahí llega texto del resumen automático.
+    local = memoria.atender(texto, "texto")
+    if local is not None:
+        tm.ruta("rapido")
+        print(local[0])
+        if hablar:
+            from decir import decir
+            decir(local[0])
+        else:
+            tm.total()
+        sys.exit(0)
     resp, cerebro = pensar(texto, voz=hablar)
     print(resp)
     if hablar:

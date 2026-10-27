@@ -809,7 +809,7 @@ class T37_TelemetriaSinContenido(Base):
             self.assertNotIn(x, txt)
         for f in self.filas():
             self.assertTrue(set(f) <= {"fecha", "id", "origen", "etapa", "ms", "ruta", "estado", "sesion",
-                                       "anticipada", "motivo"})
+                                       "anticipada", "motivo", "candidatos", "seleccionados", "usada"})   # upgrade 07
 
     def test_jv_latencia_resume_voz_anticipada(self):
         import io, latencia

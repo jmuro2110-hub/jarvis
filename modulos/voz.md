@@ -36,3 +36,6 @@
 - **Voz al `result`:** en la ruta normal la primera línea suena en cuanto llega un `result` válido (éxito, sin error, no aviso de límite), sin esperar a que `claude` salga (~0.5–1.0 s antes). Si `claude` sale con error después de un `result` válido, la respuesta cuenta como buena.
 - **Pendientes sin Claude:** «¿qué tengo pendiente?», «mis pendientes», «qué tengo de tarea», «qué tengo (para) hoy/mañana», «…de la escuela / de <materia>» leen `memoria/pendientes.md` (solo `[ ]`, por fecha; voz: 3 y "N más en pantalla"). «…de Jarvis / del proyecto / del desarrollo» va al cerebro.
 - Config: `barge_in` (false = como el 05), `hablar_al_result` (false = espera la salida). Pruebas: `tests/test_barge_in.py`.
+
+## Upgrade 07 (memoria)
+- «Recuerda que… / corrige ese recuerdo… / olvida… / ¿qué recuerdas de…?» es comando rápido (`clasificar_rapido`, después de hora y antes de modos/abrir): local, sin Claude, con confirmación corta. También entra por la orden nueva del barge-in. «Recuérdame…» sigue yendo a pendientes. `conv.ultimo_recuerdo` (solo en memoria) resuelve «ese recuerdo». Ver `modulos/memoria.md`.

@@ -31,13 +31,20 @@ ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion
           # claude_salida − tts_inicio (observado). barge_deteccion: inferencia de Whisper base sobre un
           # candidato (motivo = confirmado o por qué se rechazó). barge_parada: inicio de la voz de JP → voz
           # de Jarvis parada (estimado con el reloj del bloque de audio). barge_tipo: qué pidió (motivo).
-          "claude_salida", "ahorro_result", "barge_deteccion", "barge_parada", "barge_tipo")
+          "claude_salida", "ahorro_result", "barge_deteccion", "barge_parada", "barge_tipo",
+          # upgrade 07 (memoria). memoria_busqueda: búsqueda para el prompt de Claude (candidatos, seleccionados,
+          # usada). memoria_accion: guardar/corregir/olvidar/consultar local (motivo = resultado).
+          # memoria_lectura: renglones inválidos o error al leer. Nunca el contenido de un recuerdo.
+          "memoria_busqueda", "memoria_accion", "memoria_lectura")
 # Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
 MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
                   "no_voz", "markdown", "distinto", "salida_tardia",
                   # barge-in (upgrade 06)
                   "confirmado", "sin_jarvis", "jarvis_en_medio", "eco", "eco_jarvis", "fantasma", "temprano",
-                  "callar", "espera", "solo_jarvis", "orden")
+                  "callar", "espera", "solo_jarvis", "orden",
+                  # memoria (upgrade 07)
+                  "guardado", "duplicado", "sensible", "ambiguo", "largo", "corregido", "desactivado", "consulta",
+                  "sin_antecedente", "error_escritura", "error_lectura", "invalido")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")
@@ -143,6 +150,10 @@ def registrar(nombre, ms, ruta=None, estado="exito", extra=None):
                 fila[k] = v
             elif k == "motivo" and v in MOTIVOS_STREAM:
                 fila[k] = v
+            elif k == "usada" and isinstance(v, bool):      # upgrade 07: solo conteos, nunca contenido
+                fila[k] = v
+            elif k in ("candidatos", "seleccionados") and isinstance(v, int) and not isinstance(v, bool):
+                fila[k] = max(0, min(v, 100000))
         ARCHIVO.parent.mkdir(parents=True, exist_ok=True)
         with open(ARCHIVO, "a") as f:
             f.write(json.dumps(fila) + "\n")

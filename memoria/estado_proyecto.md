@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-27 (upgrade 06: barge-in, voz al result y contexto personal)
+**Última actualización:** 2026-10-27 (upgrade 07: memoria permanente y recuerdos relevantes)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -41,6 +41,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Procesos dentro de Terminal (no launchd) por permisos de micrófono/Documentos.
 - ElevenLabs se pospone: primero conversación y velocidad (acuerdo con ChatGPT).
 - ChatGPT nunca edita archivos; sin carpeta local en su proyecto.
+- Memoria permanente (upgrade 07, 2026-10-27): «Jarvis, recuerda que…» (voz o ⌃⌥Espacio) guarda en local, sin Claude, en ~/.jarvis/recuerdos.jsonl (0600, registro de eventos, fsync). Corregir, olvidar (desactiva, no borra) y «¿qué recuerdas de…?». Claude recibe hasta 3 recuerdos relevantes como datos (búsqueda léxica con raíces, por ámbito; desarrollo solo si pregunta por Jarvis). Sin recuerdos: Codex, el resumen automático y el historial. Privacidad: no guarda secretos, datos médicos o financieros, terceros ni contenido de páginas. `jv memoria listar|buscar|estado`. Búsqueda con 500 recuerdos: p50 11 ms. 63 pruebas nuevas + 275 previas = 338 OK. Ver modulos/memoria.md.
 
 ## Pendientes conocidos
 - [ ] JP: sacar llave de Groq y guardarla (`chmod +x ~/Documents/Jarvis/bin/jv && ~/Documents/Jarvis/bin/jv llave groq`), reiniciar Jarvis.
@@ -52,15 +53,16 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
 1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Barge-in ✅ (upgrade 06).
 2. **Velocidad**: medida, stdin resuelto (01/03) y stream-json con voz anticipada (05) ✅.
-3. **Memoria que aprende**: permanente vs reciente vs recuerdos relevantes.
+3. **Memoria que aprende**: permanente vs reciente vs recuerdos relevantes (upgrade 07, código listo; ✅ cuando pase la prueba física).
 4. **Iniciativa con criterio**: prioridades, silencio, no repetir avisos, contexto (modo, pendientes).
 5. **Autonomía real en macOS** con candados por código (no solo instrucciones).
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 06 terminado (2026-10-27). Prueba física: A «Jarvis, cállate» calló la voz (≈1.6 s desde que JP empezó a hablar; Whisper 0.61 s) y cerró; B «Jarvis, espera» la calló (≈2.2 s) y siguió con contexto; C NO llegó a ser barge-in (la respuesta terminó antes de que JP hablara; la corrección entró como seguimiento y salió bien); D con música, con bocinas y con audífonos: cero falsas interrupciones; E voz al result 0.39–0.52 s antes de la salida de claude; F pendientes solo personales y técnico solo al preguntar por Jarvis; G cierre por tope de 5 turnos; H rollback correcto. Arreglados tras la prueba: «qué tengo? Pendiente» (puntuación de en medio) y la fila barge_tipo de «espera».
-- Siguiente: decidir el Upgrade 07 con ChatGPT. NO se empezó.
-- Límites abiertos: barge-in sin cancelación de eco y con piso de ruido propio: con música alta casi no hay candidatos (no interrumpe en falso, pero puede no oír a JP); callarlo tarda ~1.5–2.2 s; «no, mejor X» con la voz sonando solo está probado en automático; la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s; la voz anticipada solo aplica a preguntas de conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
+- Upgrade 07 (memoria) con código, pruebas automáticas (338 OK) y commit hechos. **Falta la prueba física A–G con JP.**
+- Upgrade 06 terminado (2026-10-27): barge-in («cállate» ≈1.6 s, «espera» ≈2.2 s), cero falsas interrupciones con música, voz al result 0.39–0.52 s antes, pendientes solo personales.
+- Límites abiertos (07): búsqueda léxica, sin semántica; dos recuerdos que se contradicen se pasan juntos; con el orden del ajuste 2, «recuerda que… pausa…» pausa Spotify; la validación de privacidad es por palabras (conservadora); reiniciar Jarvis no borra la sesión reciente (30 min).
+- Límites abiertos (06 y antes): barge-in sin cancelación de eco y con piso de ruido propio: con música alta casi no hay candidatos; callarlo tarda ~1.5–2.2 s; «no, mejor X» con la voz sonando solo está probado en automático; la primera detección con Whisper base tras reiniciar tardó 6.2 s; la voz anticipada solo aplica a conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.

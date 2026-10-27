@@ -135,7 +135,8 @@ class T17_Telemetria(Base):
         self.assertEqual(f["claude_api"]["ms"], 1700)
         self.assertEqual(f["claude_arranque_est"]["ms"], max(0.0, round(f["claude_p"]["ms"] - 2000, 1)))
         for x in f.values():
-            self.assertTrue(set(x) <= {"fecha", "id", "origen", "etapa", "ms", "ruta", "estado", "sesion"})
+            self.assertTrue(set(x) <= {"fecha", "id", "origen", "etapa", "ms", "ruta", "estado", "sesion",
+                                       "candidatos", "seleccionados", "usada"})                      # upgrade 07: memoria_busqueda
             self.assertNotIn("hola", json.dumps(x))
         with mock.patch.object(sys, "argv", ["latencia"]), redirect_stdout(io.StringIO()) as out:
             latencia.main()

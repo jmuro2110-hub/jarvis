@@ -124,9 +124,19 @@ def main():
               + ("; rechazados: " + ", ".join(f"{m} {c}" for m, c in sorted(rech.items(), key=lambda x: -x[1]))
                  if rech else "")
               + ("; tipos: " + ", ".join(f"{m} {c}" for m, c in sorted(tipos.items())) if tipos else ""))
+    busq = [f for f in filas if f["etapa"] == "memoria_busqueda"]
+    acc = [f for f in filas if f["etapa"] in ("memoria_accion", "memoria_lectura")]
+    if busq or acc:
+        usadas = sum(bool(f.get("usada")) for f in busq)
+        res = {}
+        for f in acc:
+            res[f.get("motivo", "?")] = res.get(f.get("motivo", "?"), 0) + 1
+        print(f"\nMemoria: {len(busq)} búsquedas para Claude, {usadas} con recuerdos"
+              + (f" (máx {max(f.get('seleccionados', 0) for f in busq)} por consulta)" if busq else "")
+              + ("; acciones: " + ", ".join(f"{m} {c}" for m, c in sorted(res.items())) if res else ""))
     conversaciones(dias)
 
-    poco = sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
+    poco =sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
     if poco:
         print(f"\nOjo: pocas muestras en {', '.join(poco)}. "
               f"p50 necesita {MIN_P50}+ y p90 {MIN_P90}+; con menos solo se muestran mín y máx.")

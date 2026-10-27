@@ -25,3 +25,8 @@
 ## Modo asistente y barge-in (upgrade 06)
 - Toda llamada personal (voz y ⌃⌥Espacio) lleva `INSTRUCCION_ASISTENTE`: la vida de JP sale de `memoria/` y `modulos/`, no de `upgrades/`, `tests/`, `hq/`, código ni git, salvo que pregunte por el desarrollo de Jarvis. El resumen automático no la lleva. CLAUDE.md y el modo desarrollo sin cambios.
 - Interrumpir la voz nunca relanza a Claude ni repite herramientas; una orden nueva espera a que termine la anterior (una consulta por sesión a la vez). Lo sensible sigue pasando por el guardia del 02.
+
+## Upgrade 07 (memoria)
+- Los recuerdos (`~/.jarvis/recuerdos.jsonl`) se guardan solo con código local en las dos entradas de JP (voz y ⌃⌥Espacio), nunca por texto de Claude, Codex, páginas o herramientas.
+- Guardia: `jv memoria` NO está en `JV_LOCALES`. `recuerdos.jsonl` se agregó a `SECRETOS`: el asistente no lo lee con Read/Grep, así que los recuerdos solo le llegan por la búsqueda selectiva. Esto aprieta el 02, no lo afloja. `CONTROLES` no cambió (la escritura en `~/.jarvis` ya estaba bloqueada).
+- Los recuerdos entran al prompt como bloque de DATOS delimitado, nunca en `--append-system-prompt`. No pueden traer corchetes ni saltos de línea, así que no pueden cerrar el bloque, y no cambian permisos. Codex y el resumen automático no los reciben. Ver `modulos/memoria.md`.

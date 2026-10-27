@@ -18,5 +18,6 @@
   "voz_anticipada": true,
   "timeout_orden_seg": 6,
   "barge_in": true,
-  "hablar_al_result": true
+  "hablar_al_result": true,
+  "memoria_inteligente": true
 }

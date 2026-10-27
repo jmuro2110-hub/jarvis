@@ -61,6 +61,7 @@ class Conversacion:
         self.previo = None            # solo la categoría "spotify" del turno anterior, nunca el texto
         self.previo_sin_herramientas = False   # upgrade 05: el turno anterior fue por la ruta sin herramientas
         self.interrupcion = None      # upgrade 06: barge-in confirmado durante el último turno
+        self.ultimo_recuerdo = None   # upgrade 07: ID (solo en memoria del proceso) para «ese recuerdo»
 
     def _evento(self, evento, **kw):
         try:
