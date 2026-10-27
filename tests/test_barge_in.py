@@ -792,8 +792,9 @@ class T37_41_51_Pendientes(Pendientes):
 
 class T38_39_40_43_Instrucciones(unittest.TestCase):
     def test_asistente_en_voz_y_texto_no_en_auto(self):
-        voz_i = pensar_mod.instrucciones(True, "personal")
-        texto_i = pensar_mod.instrucciones(False, "personal")
+        with mock.patch.object(pensar_mod, "config", return_value={"memoria_inteligente": False}):   # 07 apagado
+            voz_i = pensar_mod.instrucciones(True, "personal")
+            texto_i = pensar_mod.instrucciones(False, "personal")
         self.assertEqual(voz_i.count("--append-system-prompt"), 1)
         self.assertIn(pensar_mod.INSTRUCCION_ASISTENTE, voz_i[1]); self.assertIn(pensar_mod.INSTRUCCION_VOZ, voz_i[1])
         self.assertEqual(texto_i, ["--append-system-prompt", pensar_mod.INSTRUCCION_ASISTENTE])

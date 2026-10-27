@@ -25,6 +25,14 @@ INSTRUCCION_ASISTENTE = (
     "git ni el código para eso, salvo que JP pregunte explícitamente por el desarrollo de Jarvis. Si "
     "memoria/pendientes.md no tiene lo que pide, dilo tal cual: no busques en otro lado ni inventes."
 )
+# Upgrade 07 (red de seguridad, solo con memoria_inteligente): si «recuerda que…» llega a Claude (Groq lo oyó raro),
+# que no lo meta en la bitácora: los recuerdos permanentes solo los guarda el código local de Jarvis.
+INSTRUCCION_MEMORIA = (
+    "Los recuerdos permanentes de JP (preferencias, hechos, decisiones) los guarda Jarvis por su cuenta, no tú. "
+    "Si JP te pide recordar algo así, no lo escribas en memoria/bitacora.md ni en ningún otro archivo: dile que "
+    "no quedó guardado y que lo repita empezando con «recuerda que…». Los pendientes con fecha siguen yendo a "
+    "memoria/pendientes.md como siempre."
+)
 LIMITE_RE = streaming.LIMITE_RE           # un solo criterio de "aviso de límite" (upgrade 06)
 HIST = CASA / "historial.jsonl"
 
@@ -100,8 +108,11 @@ def asistente_sin_herramientas():
     return a
 
 def instrucciones(voz, origen):
-    """Un solo --append-system-prompt: modo asistente (personal) + voz, juntos."""
-    partes = ([INSTRUCCION_ASISTENTE] if origen == "personal" else []) + ([INSTRUCCION_VOZ] if voz else [])
+    """Un solo --append-system-prompt: modo asistente (personal) + memoria (07) + voz, juntos."""
+    personal = origen == "personal"
+    partes = ([INSTRUCCION_ASISTENTE] if personal else []) \
+        + ([INSTRUCCION_MEMORIA] if personal and config().get("memoria_inteligente", True) else []) \
+        + ([INSTRUCCION_VOZ] if voz else [])
     return ["--append-system-prompt", "\n\n".join(partes)] if partes else []
 
 class Flujo:

@@ -126,13 +126,30 @@ def categoria_de(contenido):
 
 
 # ---------- intención (función pura) ----------
-LLAMADO_RE = re.compile(r"^(?:(?:oye|hey)\s+)?jarvis\W*|^(?:y|bueno|oye)\s+|^por favor\W*", re.I)
+# Groq a veces oye «Jardis», «Yarvis», «Travis»…: cualquier variante parecida a «Jarvis» cuenta como llamado.
+WAKE_VARIANTES_RE = re.compile(r"^(j[aá]rvis|jarvi|yarvis|yarvi|harvis|jarbis|yarbis|charvis|garvis|jervis|yervis|"
+                               r"travis|jardis|yardis|jarvas|jarvist?)$", re.I)
+RELLENO = {"oye", "hey", "y", "bueno", "oiga", "ok", "okay", "este", "porfa", "por", "favor", "a", "ver"}
+
+
+def es_llamado(w):
+    """¿Esta palabra es «Jarvis» mal transcrito? Lista conocida o parecido alto (difflib ≥ 0.7)."""
+    import difflib
+    w = sin_acentos(w)
+    return bool(WAKE_VARIANTES_RE.match(w)) or (
+        4 <= len(w) <= 8 and difflib.SequenceMatcher(None, w, "jarvis").ratio() >= 0.7)
 
 
 def quitar_llamado(t):
-    t = (t or "").strip().lstrip("¿¡ ")
+    """Quita hasta 3 palabras iniciales que sean el llamado o relleno («Jardis, …», «oye Yarvis, …»).
+    La intención de memoria se busca así en las primeras 3 palabras, nunca a media frase: «mi mamá recuerda
+    que…» no es un recuerdo (mi/mamá no son llamado)."""
+    t = (t or "").strip().lstrip("¿¡,. ")
     for _ in range(3):
-        t = LLAMADO_RE.sub("", t, count=1).strip().lstrip("¿¡,. ")
+        m = re.match(r"([^\W\d_]+)[\s,.;:!¡?¿-]*", t)
+        if not m or not (es_llamado(m.group(1)) or sin_acentos(m.group(1)) in RELLENO):
+            break
+        t = t[m.end():].lstrip("¿¡,. ")
     return t
 
 
@@ -441,6 +458,9 @@ def guardar(contenido, origen):
     que = sensible(contenido)
     if que:
         return f"Eso no lo guardo, señor: parece {que}.", None, "sensible"
+    if not contenido.strip():                         # «Jarvis, recuerda que…» y una pausa: la frase se cortó
+        return ("No alcancé a oír qué guardar, señor. Dígamelo de corrido: «recuerda que…» y lo que sea.",
+                None, "ambiguo")
     if ambiguo(contenido):
         return "¿Qué quiere que recuerde exactamente, señor? Dígamelo con sus palabras.", None, "ambiguo"
     try:

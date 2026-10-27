@@ -5,7 +5,7 @@ import sounddevice as sd
 
 RATE = 16000
 CHUNK = 1600            # 100 ms
-WAKE_RE = re.compile(r"\b(j[aá]rvis|jarvi|yarvis|yarvi|harvis|jarbis|yarbis|charvis|garvis|jervis|yervis|travis)\b", re.I)
+WAKE_RE = re.compile(r"\b(j[aá]rvis|jarvi|yarvis|yarvi|harvis|jarbis|yarbis|charvis|garvis|jervis|yervis|travis|jardis|yardis)\b", re.I)
 
 
 class Oido:

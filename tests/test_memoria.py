@@ -664,6 +664,66 @@ class PausaNoEsSpotify(Base):
         self.assertEqual(len(mem.activos()), 1)
 
 
+class VariantesDelLlamado(Base):
+    """Prueba física 07: Groq oyó «Jardis, recuerda que…» y se fue a Claude (que lo anotó en la bitácora)."""
+    def test_variantes_antes_de_recuerda_que(self):
+        for i, pre in enumerate(("Jardis, ", "Yarvis ", "Travis, ", "Charvis. ", "Jarvis, ", "Oye Jardis, ",
+                                 "¿Jardis? ", "Hey, Yardis, ", "Bueno, Jarvis, ", "JARDIS ")):
+            texto = f"{pre}recuerda que prefiero el tema número {i} de la lista"
+            r = mem.atender(texto, "voz")
+            self.assertIsNotNone(r, texto)
+            self.assertEqual(r[0], f"Registrado, señor: prefiero el tema número {i} de la lista.", texto)
+
+    def test_las_otras_intenciones_tambien(self):
+        _, rid = mem.atender(f"Jardis, recuerda que {ESTUDIO}", "voz")
+        self.assertEqual(mem.intencion("Yarvis, ¿qué recuerdas sobre estudiar?"), ("consultar", "estudiar"))
+        self.assertEqual(mem.intencion("Jardis, corrige ese recuerdo: ahora prefiero 50 minutos"),
+                         ("corregir", ("", "prefiero 50 minutos")))
+        self.assertEqual(mem.intencion("Jardis, olvida ese recuerdo"), ("olvidar", ""))
+
+    def test_solo_las_primeras_tres_palabras_y_solo_llamado(self):
+        for t in ("mi mamá recuerda que prefiero la sopa", "dile a Pedro que recuerda que mañana hay junta",
+                  "oye oye oye oye recuerda que prefiero el té", "no recuerda que prefiero el té"):
+            self.assertIsNone(mem.intencion(t), t)
+
+    def test_voz_clasificar(self):
+        with mock.patch.object(voz, "config", lambda: self.cfg):
+            r, cat = voz.clasificar_rapido(f"Jardis, recuerda que {ESTUDIO}.", seguimiento=True)
+        self.assertEqual((r, cat), (f"Registrado, señor: {ESTUDIO}.", "memoria"))
+
+    def test_wake_re_y_separar(self):
+        import oido
+        self.assertTrue(oido.WAKE_RE.search("Jardis, recuerda que"))
+        self.assertEqual(oido.separar(f"Jardis, recuerda que {ESTUDIO}."), (True, f"recuerda que {ESTUDIO}"))
+
+    def test_recuerda_que_cortado(self):
+        r, rid = mem.atender("Jardis, recuerda que.", "voz")
+        self.assertIsNone(rid)
+        self.assertIn("de corrido", r)
+        self.assertFalse(self.archivo.exists())
+
+
+class RedDeSeguridadBitacora(Base):
+    def test_instruccion_con_memoria(self):
+        i = pensar_mod.instrucciones(True, "personal")
+        self.assertEqual(i.count("--append-system-prompt"), 1)
+        for x in ("bitacora.md", "«recuerda que…»", "pendientes.md"):
+            self.assertIn(x, i[1])
+        self.assertIn(pensar_mod.INSTRUCCION_MEMORIA, pensar_mod.instrucciones(False, "personal")[1])
+        self.assertEqual(pensar_mod.instrucciones(False, "auto"), [])
+
+    def test_sin_memoria_no_va(self):
+        self.cfg["memoria_inteligente"] = False
+        self.assertEqual(pensar_mod.instrucciones(False, "personal"),
+                         ["--append-system-prompt", pensar_mod.INSTRUCCION_ASISTENTE])
+
+    def test_en_la_llamada_real(self):
+        _, _, cmds = self.claude("Prefiero estudiar en bloques de 40 minutos.")
+        sp = cmds[0][cmds[0].index("--append-system-prompt") + 1]
+        self.assertIn(pensar_mod.INSTRUCCION_MEMORIA, sp)
+        self.assertNotIn("~/.jarvis", sp)                              # nunca le dice que lea ~/.jarvis
+
+
 class EseRecuerdoEnConversacion(Base):
     def test_procesar_anota_en_conv(self):
         conv = cv.Conversacion(); conv.activar(); conv.iniciar_turno()
