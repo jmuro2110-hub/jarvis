@@ -195,9 +195,9 @@ class T04_AbreSeguimiento(Base):
 
 class T05_SegundaSinJarvis(Base):
     def test_no_necesita_jarvis(self):
-        self.desde_idle("Jarvis, qué tengo mañana", ("di", "cuál vence primero"))
-        self.assertEqual([p[0] for p in self.pensado], ["qué tengo mañana", "cuál vence primero"])
-        self.assertEqual(self.base_llamadas, ["Jarvis, qué tengo mañana"])      # base solo en IDLE
+        self.desde_idle("Jarvis, qué materias llevo", ("di", "cuál vence primero"))
+        self.assertEqual([p[0] for p in self.pensado], ["qué materias llevo", "cuál vence primero"])
+        self.assertEqual(self.base_llamadas, ["Jarvis, qué materias llevo"])      # base solo en IDLE
 
 
 class T06_ContextoClaude(Base):
@@ -215,7 +215,7 @@ class T06_ContextoClaude(Base):
              mock.patch.object(pensar_mod, "subprocess", m), mock.patch.object(pensar_mod, "estado"), \
              mock.patch.object(pensar_mod, "log"), mock.patch.object(pensar_mod, "_guardar"), \
              mock.patch.object(sesiones, "DIR", self.casa):
-            self.desde_idle("Jarvis, qué tengo mañana", ("di", "cuál vence primero"))
+            self.desde_idle("Jarvis, qué materias llevo", ("di", "cuál vence primero"))
         a, b = llamadas
         self.assertEqual(b[b.index("--resume") + 1], a[a.index("--session-id") + 1])
         self.assertEqual(b[2], "cuál vence primero")                            # sin reenviar historial

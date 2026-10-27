@@ -21,3 +21,7 @@
 ## Conversación continua (upgrade 04)
 - La ventana de seguimiento solo existe después de una activación legítima («Jarvis» o ⌃⌥J) y se cierra sola por tiempo, turnos, callar o modo dormir. Desde IDLE nada se manda a Groq sin «Jarvis».
 - Una conversación NO autoriza nada: cada turno pasa por `pensar()` con los candados del 02 y la sesión personal del 03. Enviar, borrar, gastar y publicar siguen bloqueados.
+
+## Modo asistente y barge-in (upgrade 06)
+- Toda llamada personal (voz y ⌃⌥Espacio) lleva `INSTRUCCION_ASISTENTE`: la vida de JP sale de `memoria/` y `modulos/`, no de `upgrades/`, `tests/`, `hq/`, código ni git, salvo que pregunte por el desarrollo de Jarvis. El resumen automático no la lleva. CLAUDE.md y el modo desarrollo sin cambios.
+- Interrumpir la voz nunca relanza a Claude ni repite herramientas; una orden nueva espera a que termine la anterior (una consulta por sesión a la vez). Lo sensible sigue pasando por el guardia del 02.

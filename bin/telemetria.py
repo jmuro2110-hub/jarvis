@@ -26,10 +26,18 @@ ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion
           # comienzo de la voz (B), resultado (D) y fin de la voz. Desde el fin de la frase de JP:
           # respuesta_completa (E). voz_solapada (F) = cuánto antes del resultado empezó a hablar.
           "claude_primer_evento", "claude_primer_texto", "claude_primera_frase", "claude_resultado",
-          "tts_inicio", "tts_fin", "voz_solapada", "respuesta_completa", "incidente_voz")
+          "tts_inicio", "tts_fin", "voz_solapada", "respuesta_completa", "incidente_voz",
+          # upgrade 06. claude_salida: claude cerrado y recolectado (desde que se lanzó). ahorro_result =
+          # claude_salida − tts_inicio (observado). barge_deteccion: inferencia de Whisper base sobre un
+          # candidato (motivo = confirmado o por qué se rechazó). barge_parada: inicio de la voz de JP → voz
+          # de Jarvis parada (estimado con el reloj del bloque de audio). barge_tipo: qué pidió (motivo).
+          "claude_salida", "ahorro_result", "barge_deteccion", "barge_parada", "barge_tipo")
 # Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
 MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
-                  "no_voz", "markdown", "distinto")
+                  "no_voz", "markdown", "distinto", "salida_tardia",
+                  # barge-in (upgrade 06)
+                  "confirmado", "sin_jarvis", "jarvis_en_medio", "eco", "eco_jarvis", "fantasma", "temprano",
+                  "callar", "espera", "solo_jarvis", "orden")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")

@@ -18,13 +18,16 @@ import fcntl, json, os, re, sys, time, datetime, pathlib, subprocess
 AQUI = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI.parent / "bin"))
 sys.path.insert(0, str(AQUI))
-from comun import CASA, JARVIS, config, estado, log, abrir_url, mundo_de            # noqa: E402
+from comun import (CASA, JARVIS, config, estado, log, abrir_url, mundo_de, pendientes,  # noqa: E402
+                   fecha_bonita, es_escolar)
 from decir import decir, callar                               # noqa: E402
 from pensar import pensar, primera_linea                      # noqa: E402
 from modo import modo, disponibles                            # noqa: E402
 import telemetria as tm                                       # noqa: E402
 from conversacion import Conversacion, PROCESSING, es_cierre  # noqa: E402
 from streaming import Hablador, ruta_sin_herramientas         # noqa: E402
+from interrupciones import Vigia, tipo_de, CALLAR_RE, ESPERA_RE  # noqa: E402
+import numpy as np                                            # noqa: E402
 
 SENSIBILIDAD = float(os.environ.get("JARVIS_SENSIBILIDAD", "3.0"))  # más alto = necesita voz más fuerte
 MIC = os.environ.get("JARVIS_MIC")
@@ -57,10 +60,55 @@ def comando_rapido(t):
 SIGUIENTE_CONV = re.compile(r"\b(siguiente canción|canción siguiente|(salta|cambia)(la)? (la )?canción)\b")
 ANTERIOR_CONV = re.compile(r"\b(canción anterior|regresa la canción)\b")
 
+PEND_RE = re.compile(
+    r"^(?:y )?(?:qu[eé] (?:tengo|hay) pendiente|qu[eé] pendientes tengo|mis pendientes|cu[aá]les son mis pendientes|"
+    r"qu[eé] tengo de tarea|qu[eé] tareas tengo|qu[eé] tengo(?: para)?(?= (?:hoy|ma[ñn]ana)$))"
+    r"(?: (?:de|del|de la|para|en) (.+?)| (hoy|ma[ñn]ana))?$")
+PEND_TECNICO = re.compile(r"\b(jarvis|proyecto|desarrollo|upgrade|c[oó]digo|repo)\b")
+
+
+def pendientes_rapido(t):
+    """«¿Qué tengo pendiente?» desde memoria/pendientes.md, sin Claude (upgrade 06). None = no es esto.
+    «…de Jarvis / del proyecto / del desarrollo» no entra: va al cerebro."""
+    m = PEND_RE.match(t)
+    if not m:
+        return None
+    filtro = (m.group(1) or m.group(2) or "").strip()
+    if PEND_TECNICO.search(filtro):
+        return None
+    hoy = datetime.date.today()
+    lista = pendientes()
+    if re.search(r"\btarea", t):
+        filtro = filtro or "escuela"
+    if filtro in ("hoy", "mañana", "manana"):
+        dia = hoy if filtro == "hoy" else hoy + datetime.timedelta(days=1)
+        lista = [p for p in lista if p["fecha"] == dia]
+        nombre = "para hoy" if filtro == "hoy" else "para mañana"
+    elif filtro in ("la escuela", "escuela", "la escuela de hoy"):
+        lista = [p for p in lista if es_escolar(p["area"])]
+        nombre = "de la escuela"
+    elif filtro:
+        f = filtro.lower()
+        lista = [p for p in lista if f in p["area"].lower() or p["area"].lower() in f and p["area"]]
+        nombre = f"de {filtro}"
+    else:
+        nombre = ""
+    if not lista:
+        return f"No tiene pendientes registrados{' ' + nombre if nombre else ''}, señor."
+    def uno(p):
+        return p["texto"] + (f", para el {fecha_bonita(p['fecha'])}" if p["fecha"] else "")
+    print("📋 Pendientes" + (f" {nombre}" if nombre else "") + ":\n" +
+          "\n".join(f"   - {uno(p)}" + (f"  [{p['area']}]" if p["area"] else "") for p in lista))
+    n = len(lista)
+    voz = f"Tiene {n} pendiente{'s' if n > 1 else ''}" + (f" {nombre}" if nombre else "") + ", señor: "
+    voz += "; ".join(uno(p) for p in lista[:3])
+    return voz + (f"; y {n - 3} más en pantalla." if n > 3 else ".")
+
+
 def clasificar_rapido(t, seguimiento=False, previo=None):
     """(respuesta, categoría). respuesta None = no es comando rápido. En IDLE las reglas son las de siempre."""
     t = t.lower().strip(" .,!¿?¡")
-    t = re.sub(r"^(oye |hey )?jarvis[, ]*", "", t)
+    t = re.sub(r"^(oye |hey )?jarvis[, ]*", "", t).strip(" .,!¿?¡")   # «Jarvis, ¿qué…?» sin el «¿» suelto
     c = config()
     if re.fullmatch(r"(cállate|silencio|basta)" if seguimiento else r"(cállate|silencio|ya|basta|para)", t):
         callar(); return "", "callar"
@@ -85,6 +133,9 @@ def clasificar_rapido(t, seguimiento=False, previo=None):
     m = re.search(r"volumen (al |a )?(\d{1,3})", t)
     if m:
         osa(f"set volume output volume {min(100, int(m.group(2)))}"); return "", "volumen"
+    pend = pendientes_rapido(t)
+    if pend is not None:
+        return pend, "pendientes"
     if re.fullmatch(r"(qué hora es|la hora|dime la hora)", t):
         n = datetime.datetime.now(); return f"Son las {n.hour}:{n.minute:02d}, señor.", "hora"
     m = re.search(r"\bmodo (\w+)", t)
@@ -180,8 +231,9 @@ def procesar(texto, conv=None, seguimiento=False):
     subprocess.Popen(["afplay", "/System/Library/Sounds/Pop.aiff"])
     # Upgrade 05: stream-json; si es pregunta de conocimiento general, ruta sin herramientas y la primera
     # línea puede empezar a sonar antes de que Claude termine (voz en proceso hijo, una a la vez).
+    # Upgrade 06: en la ruta normal suena al llegar `result`, y el vigía oye «Jarvis, …» mientras habla.
     sin_herr = ruta_sin_herramientas(texto, seguimiento, bool(conv and conv.previo_sin_herramientas))
-    hablador = Hablador(cerrar_pedido=cerrar_pedido, al_empezar=lambda: _empezo_voz(conv))
+    hablador = _nuevo_hablador(conv)
     try:
         resp, cerebro = pensar(texto, voz=True, hablador=hablador, sin_herramientas=sin_herr)
         (CASA / "ultima_respuesta.txt").write_text(resp)
@@ -202,11 +254,68 @@ def procesar(texto, conv=None, seguimiento=False):
             _hablar(primera_linea(resp), conv)
     finally:
         hablador.cancelar()                           # nunca queda un hijo de voz huérfano
+        _anotar_interrupcion(hablador, conv)
     tm.desde_fin("respuesta_completa")
     if conv:
         conv.previo_sin_herramientas = bool(sin_herr and cerebro == "claude")
-    estado("listo")
+    estado("listo")                                   # tras cancelar, nada se queda en "hablando"
     return "cerebro"
+
+
+# ---------- barge-in (upgrade 06) ----------
+_BARGE = {"oido": None, "rapido": None}               # main() los llena; sin ellos no hay vigía
+
+
+def _vigia():
+    if _BARGE["oido"] is None or not config().get("barge_in", True):
+        return None
+    return Vigia(_BARGE["oido"].cola, _BARGE["rapido"], sens=SENSIBILIDAD, idioma=IDIOMA, registrar=tm.registrar)
+
+
+def _nuevo_hablador(conv):
+    """Toda voz de la conversación pasa por aquí: proceso hijo en su grupo + vigía si hay barge-in."""
+    return Hablador(cerrar_pedido=cerrar_pedido, al_empezar=lambda: _empezo_voz(conv),
+                    vigia=_vigia() if conv else None)
+
+
+def _anotar_interrupcion(hablador, conv):
+    det = hablador.interrupcion if hablador.interrumpido else None
+    if det is None or conv is None:
+        return
+    conv.interrupcion = det
+    if det.t_voz is not None and det.t_parada is not None:
+        tm.registrar("barge_parada", (det.t_parada - det.t_voz) * 1000)
+
+
+def atender_interrupcion(oido, preciso, det):
+    """Ya se paró la voz. Regresa ("cerrar"|"manual"|"seguimiento", None) o ("turno", texto).
+    Nunca inventa una orden: sin texto claro, se queda escuchando (FOLLOW_UP)."""
+    tipo, x = det.tipo, det.resto
+    if tipo in ("callar", "espera"):
+        tm.registrar("barge_tipo", 0, extra={"motivo": tipo})
+        return ("cerrar" if tipo == "callar" else "seguimiento"), None
+    if tipo == "solo_jarvis":
+        texto = pedir_comando(oido, preciso, vaciar=False)   # lo que JP siga diciendo no se tira
+    else:
+        audio = det.audio
+        if det.cortado:                                       # seguía hablando al cortar la ventana de 2.5 s
+            resto = oido.frase(fin_silencio=1.3, max_dur=25, espera_inicio=1.0, cerrar=CERRAR)
+            if resto is not None and not isinstance(resto, str):
+                audio = np.concatenate([audio, resto])
+        estado("pensando", "transcribiendo…")
+        texto = oir_bien(audio, preciso)                       # Groq una vez (o small de respaldo)
+    activado, r = separar(texto or "")
+    t, x = tipo_de(r if activado else (texto or ""))
+    if t == "solo_jarvis" and tipo == "orden":
+        t, x = "orden", det.resto                              # Groq no oyó nada útil: el borrador de base
+    tm.registrar("barge_tipo", 0, extra={"motivo": t})
+    if t == "callar":
+        return "cerrar", None
+    if t in ("espera", "solo_jarvis") or not x:
+        return "seguimiento", None
+    if es_cierre(x):
+        return "manual", None
+    return "turno", x
 
 
 def _empezo_voz(conv):
@@ -218,6 +327,17 @@ def _empezo_voz(conv):
 
 
 def _hablar(texto, conv):
+    if conv and _BARGE["oido"] is not None and config().get("barge_in", True):
+        h = _nuevo_hablador(conv)                     # upgrade 06: también aquí se le puede hablar encima
+        try:
+            h.decir(texto)
+            h.esperar()
+        finally:
+            h.cancelar()
+            _anotar_interrupcion(h, conv)
+        if h.error and not cerrar_pedido():
+            raise RuntimeError("la voz falló")
+        return
     if conv and conv.estado == PROCESSING:
         conv.hablar()
     ok = decir(texto)                                 # regresa cuando say/afplay de verdad terminó
@@ -343,9 +463,26 @@ def conversar(oido, preciso, conv, orden=None, vaciar=True):
         seguimiento = False
         while True:
             conv.iniciar_turno()
+            conv.interrupcion = None
             categoria = procesar(texto, conv, seguimiento)
             tm.terminar()
-            if not conv.respuesta_terminada(categoria, cerrar=cerrar_pedido()):
+            det, conv.interrupcion = conv.interrupcion, None
+            if det is not None:                       # upgrade 06: le hablaron encima («Jarvis, …»)
+                accion, x = atender_interrupcion(oido, preciso, det)
+                tm.terminar()
+                if accion == "cerrar":
+                    conv.cerrar("callar"); return
+                if accion == "manual":
+                    sonido("Bottle"); conv.cerrar("manual"); return
+                abierta = conv.respuesta_terminada(categoria, cerrar=cerrar_pedido())
+                if accion == "turno":
+                    if not abierta:                   # tope de turnos/tiempo: hubo «Jarvis» → otra conversación
+                        conv.activar()
+                    texto, seguimiento = x, abierta
+                    continue
+                if not abierta:
+                    return
+            elif not conv.respuesta_terminada(categoria, cerrar=cerrar_pedido()):
                 return
             texto = esperar_seguimiento(oido, preciso, conv)
             if texto is None:
@@ -418,6 +555,7 @@ def main():
     conv = Conversacion.desde_config(config(), registrar=tm.conversacion)
 
     with Oido(mic=MIC, sensibilidad=SENSIBILIDAD) as oido:
+        _BARGE.update(oido=oido, rapido=rapido)       # el vigía usa la MISMA cola y el mismo Whisper base
         estado("listo")
         decir("Sistemas en línea, señor.")
         print('\n🎙  Di "Jarvis, …" o usa Ctrl+Opción+J   (Ctrl+C para salir)\n')

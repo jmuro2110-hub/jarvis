@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-27 (upgrade 05: stream-json, voz anticipada y captura tras «Jarvis»)
+**Última actualización:** 2026-10-27 (upgrade 06: barge-in, voz al result y contexto personal)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -50,7 +50,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - [ ] Subir Jarvis a GitHub privado (jmuro2110-hub/jarvis) para que ChatGPT lea el código real.
 
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
-1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Pendiente: barge-in (interrumpirlo mientras habla).
+1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Barge-in ✅ (upgrade 06, pendiente de prueba física).
 2. **Velocidad**: medida, stdin resuelto (01/03) y stream-json con voz anticipada (05) ✅.
 3. **Memoria que aprende**: permanente vs reciente vs recuerdos relevantes.
 4. **Iniciativa con criterio**: prioridades, silencio, no repetir avisos, contexto (modo, pendientes).
@@ -58,9 +58,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 05 (stream-json, voz anticipada, captura tras «Jarvis») hecho: 209 pruebas OK, benchmark real y **prueba física aprobada (2026-10-27)**: A voz anticipada 0.57 s antes del resultado; B con herramientas sin adelantarse; C «Jarvis» + pausa + «Dime tres planetas» completa; D «Abre Spotify» durante el tin completa; E contexto (Júpiter); F cierre y nada sin activación; G ruta JSON con `claude_streaming: false` (regresado a true). El cierre manual ahora acepta «cierro/ciérrala/cerremos/ya cierra» (Groq oyó «Cierro»).
-- Siguiente: barge-in (interrumpir a Jarvis con la voz mientras habla). NO se empezó.
-- Límites abiertos: sin barge-in; la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s (arranque en frío del modelo); la voz anticipada solo aplica a preguntas de conocimiento general (lo demás espera el resultado, a propósito); el proceso de Claude tarda ~0.4–0.7 s en salir después de `result` y la ruta normal todavía espera esa salida; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
+- Upgrade 06 (barge-in, voz al result, contexto personal) implementado: 273 pruebas automáticas OK y benchmark real de voz al result. **Prueba física con JP: PENDIENTE** (bocinas/audífonos).
+- Siguiente: decidir el Upgrade 07 con ChatGPT. NO se empezó.
+- Límites abiertos: barge-in sin cancelación de eco (con bocinas puede no oír «Jarvis» encima de su propia voz o tardar); la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s (arranque en frío); la voz anticipada solo aplica a preguntas de conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.

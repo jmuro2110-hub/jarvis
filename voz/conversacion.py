@@ -60,6 +60,7 @@ class Conversacion:
         self.t0 = self.fin_ventana = None
         self.previo = None            # solo la categoría "spotify" del turno anterior, nunca el texto
         self.previo_sin_herramientas = False   # upgrade 05: el turno anterior fue por la ruta sin herramientas
+        self.interrupcion = None      # upgrade 06: barge-in confirmado durante el último turno
 
     def _evento(self, evento, **kw):
         try:

@@ -142,7 +142,8 @@ class Base(unittest.TestCase):
         return st.Hablador(lanzar=voz_f or FalsaVoz(), cerrar_pedido=self.cerrar.exists)
 
     def pensar(self, falso, texto="qué es una órbita", hablador=None, sin_herr=True, config=None, codex=None):
-        cfg = {"claude_streaming": True, "voz_anticipada": True, **(config or {})}
+        # semántica del 05 (las pruebas del 06 activan hablar_al_result explícitamente)
+        cfg = {"claude_streaming": True, "voz_anticipada": True, "hablar_al_result": False, **(config or {})}
         with mock.patch.object(pensar_mod.streaming, "correr", functools.partial(st.correr, popen=falso)), \
              mock.patch.object(pensar_mod, "config", return_value=cfg), \
              mock.patch.object(pensar_mod, "codex", codex or mock.MagicMock(return_value=(None, "sin codex"))):
@@ -533,7 +534,7 @@ class Voz(Base):
         self.bit.append(("decir", texto)); return True
 
     def turno(self, falso, texto="qué es una órbita", conv=None, sin_herr_cfg=None):
-        cfg = {"claude_streaming": True, "voz_anticipada": True}
+        cfg = {"claude_streaming": True, "voz_anticipada": True, "hablar_al_result": False}
         with mock.patch.object(pensar_mod.streaming, "correr", functools.partial(st.correr, popen=falso)), \
              mock.patch.object(pensar_mod, "config", return_value=cfg), \
              mock.patch.object(voz, "pensar", pensar_mod.pensar):

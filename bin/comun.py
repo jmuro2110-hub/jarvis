@@ -24,6 +24,8 @@ DEFAULTS = {
     "claude_streaming": True,           # upgrade 05: false = ruta JSON exacta del 04 (no cambia permisos)
     "voz_anticipada": True,             # false = stream con telemetría, pero habla al final como antes
     "timeout_orden_seg": 6,             # tras «Jarvis» solo: cuánto esperar la orden
+    "barge_in": True,                   # upgrade 06: «Jarvis, …» mientras habla lo interrumpe (false = 05)
+    "hablar_al_result": True,           # upgrade 06: hablar al llegar `result`, sin esperar la salida de claude
 }
 
 def path_env():
@@ -114,6 +116,18 @@ def pendientes(solo_abiertos=True):
         res.append({"texto": m.group(2), "area": m.group(3) or "", "fecha": fecha, "hecho": hecho})
     res.sort(key=lambda p: p["fecha"] or datetime.date.max)
     return res
+
+MATERIAS = {"matemáticas", "matematicas", "mate", "español", "historia", "geografía", "geografia", "física",
+            "fisica", "química", "quimica", "biología", "biologia", "inglés", "ingles", "civismo", "formación cívica",
+            "ética", "filosofía", "filosofia", "literatura", "ciencias", "computación", "computacion",
+            "informática", "informatica", "educación física", "artes", "economía", "economia", "lógica", "logica",
+            "taller de lectura y redacción", "tlr", "cálculo", "calculo", "álgebra", "algebra", "geometría",
+            "estadística", "psicología", "sociología", "derecho", "metodología", "orientación"}
+
+def es_escolar(area):
+    """¿Es pendiente de la escuela? Área "escuela"/"tarea"/"examen" o una materia conocida."""
+    a = (area or "").strip().lower()
+    return bool(a) and (a in MATERIAS or bool(re.search(r"\b(escuela|tarea|examen|clase|classroom)\b", a)))
 
 def limpiar_para_voz(t):
     t = re.sub(r"```.*?```", "", t, flags=re.S)

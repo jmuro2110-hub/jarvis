@@ -13,7 +13,7 @@ Piezas, de la más pura a la que toca procesos:
 
 Nada de esto guarda texto en la telemetría.
 """
-import json, os, re, selectors, subprocess, sys, tempfile, time, pathlib
+import json, os, re, selectors, signal, subprocess, sys, tempfile, time, pathlib
 
 BIN = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(BIN))
@@ -23,6 +23,26 @@ MAX_LINEA = 4 * 1024 * 1024        # una línea de stream más grande que esto =
 MAX_FRASE = 600                    # sin límite de frase en 600 caracteres: se espera al resultado
 MOTIVOS = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
            "no_voz", "markdown")
+LIMITE_RE = re.compile(r"(usage limit|limit reached|rate.?limit|out of (extra )?usage|"
+                       r"credit balance|quota|overloaded|hit your limit)", re.I)
+
+
+def primera_linea(resp):
+    for l in (resp or "").splitlines():
+        if l.strip():
+            return l.strip()
+    return resp or ""
+
+
+def result_valido(d):
+    """UN solo criterio (upgrade 06) para hablar al `result` y para aceptar la respuesta: éxito, sin error,
+    texto no vacío y que no sea un aviso de límite. Si no, no se habla nada."""
+    if not isinstance(d, dict) or d.get("type", "result") != "result":
+        return False
+    res = d.get("result")
+    if d.get("is_error") or d.get("subtype", "success") != "success" or not isinstance(res, str) or not res.strip():
+        return False
+    return not (LIMITE_RE.search(res) and len(res.strip()) < 400)
 
 
 # ---------------------------------------------------------------- clasificador (solo voz)
@@ -216,15 +236,55 @@ def coincide(hablado, final):
 
 # ---------------------------------------------------------------- voz en proceso hijo
 def lanzar_decir(texto):
-    """bin/decir.py como hijo: voz.lock, Juan, limpiar_para_voz, callar por pkill. Hereda JARVIS_REQ_ID."""
+    """bin/decir.py como hijo: voz.lock, Juan, limpiar_para_voz, callar por pkill. Hereda JARVIS_REQ_ID.
+    En su PROPIO grupo de procesos (upgrade 06): cancelar mata a decir.py y a su `say`/`afplay`, y a nadie más."""
     return subprocess.Popen([sys.executable, str(BIN / "decir.py"), texto], stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ))
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ),
+                            start_new_session=True)
+
+
+def matar_grupo(proc, gracia=0.5):
+    """SIGTERM al grupo del hijo de voz; SIGKILL si sigue vivo tras `gracia`. Idempotente."""
+    if proc is None:
+        return
+    try:
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, OSError):
+        pgid = None
+    propio = pgid is not None and pgid != os.getpgrp()      # nunca el grupo de Jarvis
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            if propio:
+                os.killpg(pgid, sig)
+            elif proc.poll() is None:
+                proc.send_signal(sig)
+        except (ProcessLookupError, OSError):
+            pass
+        try:
+            proc.wait(timeout=gracia)
+            if propio:
+                try:
+                    os.killpg(pgid, 0)                      # ¿queda alguien del grupo (el `say`)?
+                except (ProcessLookupError, OSError):
+                    return
+            else:
+                return
+        except subprocess.TimeoutExpired:
+            continue
+    try: proc.wait(timeout=2)
+    except Exception: pass
 
 
 class Hablador:
     """Reproduce pedazos uno a la vez, sin bloquear a quien lee el stream. Nunca dos voces a la vez."""
-    def __init__(self, lanzar=lanzar_decir, cerrar_pedido=lambda: False, al_empezar=None, reloj=time.perf_counter):
+    def __init__(self, lanzar=lanzar_decir, cerrar_pedido=lambda: False, al_empezar=None, reloj=time.perf_counter,
+                 vigia=None):
         self.lanzar, self.cerrar_pedido = lanzar, cerrar_pedido
+        self.vigia = vigia           # upgrade 06: oye «Jarvis» mientras suena la voz (voz/interrupciones.py)
+        self.interrumpido = False
+        self.interrupcion = None     # lo que confirmó el vigía (tipo, borrador, audio…)
+        self.t_pedazo = None
+        self._final = None           # resultado de finalizar(): se calcula una sola vez
         self.al_empezar = al_empezar or (lambda: None)
         self.reloj = reloj
         self.cola, self.hablado = [], []
@@ -240,7 +300,7 @@ class Hablador:
 
     def decir(self, texto):
         texto = (texto or "").strip()
-        if texto and not self.error and not self.cerrar_pedido():
+        if texto and not self.error and not self.interrumpido and not self.cerrar_pedido():
             self.cola.append(texto)
         self.tick()
 
@@ -248,17 +308,22 @@ class Hablador:
         if self.proc is not None:
             rc = self.proc.poll()
             if rc is None:
+                if self.vigia is not None and not self.interrumpido:
+                    det = self.vigia.revisar(self.hablado[-1] if self.hablado else "", self.t_pedazo)
+                    if det is not None:
+                        self.interrumpir(det)
                 return
             self.proc = None
             self.t_fin = self.reloj()
-            if rc != 0 and not self.cerrar_pedido():
+            if rc != 0 and not self.cerrar_pedido() and not self.interrumpido:
                 self.error = True
-        if self.cerrar_pedido() or self.error:
+        if self.cerrar_pedido() or self.error or self.interrumpido:
             self.cola.clear()
             return
         if self.cola:
             texto = self.cola.pop(0)
             self.proc = self.lanzar(texto)
+            self.t_pedazo = self.reloj()
             self.hablado.append(texto)
             if self.t_inicio is None:
                 self.t_inicio = self.reloj()
@@ -282,19 +347,36 @@ class Hablador:
             time.sleep(0.1)
 
     def cancelar(self):
+        """Para SOLO esta voz (su grupo: decir.py + say/afplay). No toca a Claude, Spotify ni otras voces.
+        Idempotente. voz.lock es flock: el SO lo suelta al morir el proceso."""
         self.cola.clear()
         if self.proc is not None:
-            try:
-                self.proc.terminate()
-                self.proc.wait(timeout=5)
-            except Exception:
-                try: self.proc.kill(); self.proc.wait(timeout=5)
-                except Exception: pass
+            matar_grupo(self.proc)
             self.proc = None
+            self.t_fin = self.reloj()
+
+    def interrumpir(self, det):
+        """Barge-in confirmado: se calla ya y nada más de esta respuesta vuelve a sonar."""
+        self.interrumpido, self.interrupcion = True, det
+        self.cancelar()
+        try:
+            det.t_parada = self.reloj()
+        except Exception:
+            pass
 
     def finalizar(self, primera_linea_final):
         """Llegó el resultado: habla lo que falte de la primera línea, si coincide con lo ya dicho.
-        Regresa False si hubo incidente (el final no empieza con lo hablado): no se habla nada más."""
+        Regresa False si hubo incidente (el final no empieza con lo hablado): no se habla nada más.
+        Se calcula una sola vez (se llama al llegar `result` y otra vez en procesar())."""
+        if self._final is not None:
+            return self._final
+        if self.interrumpido:
+            self._final = True
+            return True
+        self._final = self._finalizar(primera_linea_final)
+        return self._final
+
+    def _finalizar(self, primera_linea_final):
         dicho = " ".join(self.hablado + self.cola)     # lo que ya sonó Y lo que ya está en fila para sonar
         if not coincide(dicho, primera_linea_final):
             return False
@@ -307,6 +389,23 @@ class Hablador:
 
 
 # ---------------------------------------------------------------- coordinador
+def _al_result(c, parser, hablador, hablar_al_result):
+    """Llegó `result`: si es válido, la primera línea se habla YA (sin esperar a que claude salga).
+    Si ya hubo voz anticipada, solo lo que falte. Con error o límite, no se habla nada."""
+    if hablador is None or not hablar_al_result:
+        return                      # (un result válido ya es final aunque antes hubo herramientas)
+    if not result_valido(parser.result):
+        return
+    linea = primera_linea(parser.result["result"])
+    if hablador.hablo:
+        if not hablador.finalizar(linea):
+            c.incidente = "distinto"
+    elif not hablador.interrumpido:
+        c.al_result = True
+        hablador.decir(linea)
+
+
+
 class Corrida:
     """Lo que pasó en una ejecución con stream (tiempos en ms desde que se lanzó claude)."""
     def __init__(self):
@@ -321,10 +420,11 @@ class Corrida:
         self.anticipada = False
         self.motivo = None           # de MOTIVOS cuando no hubo voz anticipada
         self.incidente = None
+        self.al_result = False       # upgrade 06: la voz arrancó al llegar `result`, sin esperar la salida
 
 
 def correr(cmd, hablador=None, anticipar=False, cwd=None, env=None, timeout=300, reloj=time.perf_counter,
-           popen=subprocess.Popen):
+           popen=subprocess.Popen, hablar_al_result=False):
     """Lanza claude con stream-json y lo consume. Si `anticipar`, habla la primera línea por pedazos
     mientras Claude sigue; solo si init trae cero herramientas y cero MCP, y no aparece ningún tool_use."""
     c = Corrida()
@@ -360,8 +460,9 @@ def correr(cmd, hablador=None, anticipar=False, cwd=None, env=None, timeout=300,
                 for l in lineas:
                     parser.linea(l.decode("utf-8", "replace"))
                     c.t.setdefault("primer_evento", ms())
-                    if parser.result is not None:
-                        c.t.setdefault("resultado", ms())
+                    if parser.result is not None and "resultado" not in c.t:
+                        c.t["resultado"] = ms()
+                        _al_result(c, parser, hablador, hablar_al_result)
             # ¿se puede hablar por adelantado?
             if anticipar and hablador is not None:
                 if permitido is None and parser.init_tools is not None:
@@ -378,7 +479,8 @@ def correr(cmd, hablador=None, anticipar=False, cwd=None, env=None, timeout=300,
                         c.t.setdefault("primera_frase", ms())
                         hablador.decir(pedazo)
                         pedazo = frases.siguiente()
-                hablador.tick()
+            if hablador is not None:
+                hablador.tick()                      # siempre: voz al result y vigía de barge-in
                 if hablador.t_inicio is not None:
                     c.t.setdefault("voz_inicio", round((hablador.t_inicio - t0) * 1000, 1))
             if "primera_frase" not in c.t and not frases.motivo and frases._fin_frase1() is not None:
@@ -388,8 +490,9 @@ def correr(cmd, hablador=None, anticipar=False, cwd=None, env=None, timeout=300,
         if c.error is None:
             if pendiente.strip():
                 parser.linea(pendiente.decode("utf-8", "replace"))
-                if parser.result is not None:
-                    c.t.setdefault("resultado", ms())
+                if parser.result is not None and "resultado" not in c.t:
+                    c.t["resultado"] = ms()
+                    _al_result(c, parser, hablador, hablar_al_result)
             proc.wait(timeout=30)
     except StreamRoto as e:
         c.error = "error"
@@ -417,7 +520,7 @@ def correr(cmd, hablador=None, anticipar=False, cwd=None, env=None, timeout=300,
     c.tool_use = parser.tool_use
     c.init_tools, c.init_mcp = parser.init_tools, parser.init_mcp
     c.t["fin"] = ms()
-    c.anticipada = bool(hablador is not None and hablador.hablo)
+    c.anticipada = bool(hablador is not None and hablador.hablo and not c.al_result)
     if anticipar and not c.anticipada and not c.motivo:
         c.motivo = frases.motivo or "sin_frase"
     return c

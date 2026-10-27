@@ -16,5 +16,7 @@
   "duracion_maxima_seg": 180,
   "claude_streaming": true,
   "voz_anticipada": true,
-  "timeout_orden_seg": 6
+  "timeout_orden_seg": 6,
+  "barge_in": true,
+  "hablar_al_result": true
 }

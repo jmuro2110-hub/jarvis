@@ -15,8 +15,16 @@ INSTRUCCION_VOZ = (
     "sin markdown, con tu estilo de Jarvis. Si hace falta más detalle, ponlo después "
     "de una línea en blanco; eso solo se muestra en pantalla."
 )
-LIMITE_RE = re.compile(r"(usage limit|limit reached|rate.?limit|out of (extra )?usage|"
-                       r"credit balance|quota|overloaded|hit your limit)", re.I)
+# Modo asistente (upgrade 06): la vida de JP sale de memoria/ y modulos/, no del código del proyecto.
+# (Diagnóstico: ante "¿qué tengo pendiente?" Claude corría git y Glob/Grep por el repo.) Solo personal.
+INSTRUCCION_ASISTENTE = (
+    "Estás en modo asistente personal, no de desarrollo. Para la vida de JP (pendientes, escuela, rutina, "
+    "dinero, planes) tus fuentes son memoria/pendientes.md, memoria/jp.md, memoria/bitacora.md, "
+    "memoria/dinero.json y modulos/. No uses upgrades/, tests/, hq/, bin/, voz/, memoria/estado_proyecto.md, "
+    "git ni el código para eso, salvo que JP pregunte explícitamente por el desarrollo de Jarvis. Si "
+    "memoria/pendientes.md no tiene lo que pide, dilo tal cual: no busques en otro lado ni inventes."
+)
+LIMITE_RE = streaming.LIMITE_RE           # un solo criterio de "aviso de límite" (upgrade 06)
 HIST = CASA / "historial.jsonl"
 
 # Modo asistente (upgrade 02): una consulta cotidiana NO hereda los permisos de desarrollo.
@@ -90,14 +98,20 @@ def asistente_sin_herramientas():
     a[a.index("--tools") + 1] = ""
     return a
 
+def instrucciones(voz, origen):
+    """Un solo --append-system-prompt: modo asistente (personal) + voz, juntos."""
+    partes = ([INSTRUCCION_ASISTENTE] if origen == "personal" else []) + ([INSTRUCCION_VOZ] if voz else [])
+    return ["--append-system-prompt", "\n\n".join(partes)] if partes else []
+
 class Flujo:
-    """Stream-json solo para el ciclo de voz (upgrade 05). anticipar = puede hablar antes del resultado."""
-    def __init__(self, hablador, anticipar, motivo=None):
-        self.hablador, self.anticipar = hablador, anticipar
+    """Stream-json solo para el ciclo de voz (upgrade 05). anticipar = puede hablar antes del resultado.
+    al_result (upgrade 06) = la primera línea suena al llegar `result`, sin esperar la salida de claude."""
+    def __init__(self, hablador, anticipar, motivo=None, al_result=False):
+        self.hablador, self.anticipar, self.al_result = hablador, anticipar, al_result
         self.motivo = motivo         # por qué no se anticipa de entrada: con_tools / desactivado
         self.corrida = None
 
-def _claude_una(texto, voz, reanudar, flujo=None):
+def _claude_una(texto, voz, reanudar, flujo=None, origen="personal"):
     """Una llamada a claude -p. reanudar = ID exacto (--resume) o None (sesión nueva con --session-id).
     Devuelve (respuesta, error, session_id devuelto)."""
     t_prep = tm.ahora()
@@ -105,8 +119,7 @@ def _claude_una(texto, voz, reanudar, flujo=None):
     cmd += (["--output-format", "stream-json", "--verbose", "--include-partial-messages"] if flujo
             else ["--output-format", "json"])
     cmd += ["--resume", reanudar] if reanudar else ["--session-id", sesiones.nuevo_id()]
-    if voz:
-        cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
+    cmd += instrucciones(voz, origen)
     # candados del upgrade 02 en CADA llamada, también al reanudar; la ruta sin herramientas solo vacía --tools
     cmd += asistente_sin_herramientas() if flujo and flujo.anticipar else ASISTENTE_CLAUDE
     tm.sesion("reanudada" if reanudar else "nueva")
@@ -137,7 +150,8 @@ def _claude_una(texto, voz, reanudar, flujo=None):
 def _claude_stream(cmd, reanudar, flujo):
     """stream-json: misma interfaz que la ruta JSON. `result` es la fuente de la respuesta completa."""
     with tm.etapa("claude_p", ruta="claude") as e:
-        c = streaming.correr(cmd, flujo.hablador, flujo.anticipar, cwd=JARVIS, env=entorno_asistente())
+        c = streaming.correr(cmd, flujo.hablador, flujo.anticipar, cwd=JARVIS, env=entorno_asistente(),
+                             hablar_al_result=flujo.al_result)
         flujo.corrida = c
         e.extra = {"anticipada": c.anticipada}
         if not c.anticipada:
@@ -149,6 +163,10 @@ def _claude_stream(cmd, reanudar, flujo):
                 tm.registrar(etapa, c.t[clave])
         if c.anticipada and "voz_inicio" in c.t and "resultado" in c.t and c.t["resultado"] > c.t["voz_inicio"]:
             tm.registrar("voz_solapada", c.t["resultado"] - c.t["voz_inicio"])
+        if "fin" in c.t:
+            tm.registrar("claude_salida", c.t["fin"])        # proceso cerrado y recolectado
+            if "voz_inicio" in c.t and c.t["fin"] > c.t["voz_inicio"]:
+                tm.registrar("ahorro_result", c.t["fin"] - c.t["voz_inicio"])   # cuánto antes de la salida habló
         if c.incidente:
             tm.registrar("incidente_voz", 0, estado="error", extra={"motivo": c.incidente})
         d = c.result if isinstance(c.result, dict) else None
@@ -158,23 +176,24 @@ def _claude_stream(cmd, reanudar, flujo):
             e.estado = "timeout"
             return None, "tardó demasiado", None
         res = (d.get("result") or "").strip() if d and isinstance(d.get("result"), str) else ""
-        if c.rc != 0 or c.error or d is None or d.get("is_error") or not res \
-                or (LIMITE_RE.search(res) and len(res) < 400):
-            e.estado = "error"
-            return None, (res or c.stderr.strip() or "stream incompleto")[:300], None
-    return res, None, d.get("session_id")
+        if streaming.result_valido(d) and c.error is None:
+            if c.rc != 0:                                    # result bueno y luego salió mal: cuenta como buena
+                tm.registrar("incidente_voz", 0, estado="error", extra={"motivo": "salida_tardia"})
+            return res, None, d.get("session_id")
+        e.estado = "error"
+        return None, (res or c.stderr.strip() or "stream incompleto")[:300], None
 
 def claude(texto, voz, origen="personal", flujo=None):
     if not shutil.which("claude"):
         return None, "no instalado"
     with sesiones.turno(origen):                  # serializa por origen: nadie pisa el mismo ID
         sid = sesiones.vigente(origen)
-        res, err, devuelto = _claude_una(texto, voz, sid, flujo)
+        res, err, devuelto = _claude_una(texto, voz, sid, flujo, origen)
         nada_paso = not flujo or (not flujo.hablador.hablo and not (flujo.corrida and flujo.corrida.tool_use))
         if res is None and sid and NO_EXISTE_RE.search(err or "") and nada_paso:
             log("la sesión del asistente ya no existe; empiezo otra (sin --continue)")
             sid = None
-            res, err, devuelto = _claude_una(texto, voz, None, flujo)
+            res, err, devuelto = _claude_una(texto, voz, None, flujo, origen)
         if res is not None:
             if sid and devuelto != sid:
                 log("Claude devolvió otro session_id al reanudar; guardo el devuelto")
@@ -277,7 +296,8 @@ def pensar(texto, voz=False, origen="personal", hablador=None, sin_herramientas=
         if c.get("claude_streaming", True):
             activa = bool(c.get("voz_anticipada", True))
             flujo = Flujo(hablador, activa and sin_herramientas,
-                          None if activa and sin_herramientas else ("desactivado" if not activa else "con_tools"))
+                          None if activa and sin_herramientas else ("desactivado" if not activa else "con_tools"),
+                          al_result=bool(c.get("hablar_al_result", True)))
     resp, err = claude(texto, voz, origen, flujo) if flujo else claude(texto, voz, origen)
     cerebro = "claude"
     tm.ruta("claude")
@@ -309,11 +329,7 @@ def pensar(texto, voz=False, origen="personal", hablador=None, sin_herramientas=
         estado("listo")                             # si la voz anticipada sigue sonando, ella lo pone al final
     return resp, cerebro
 
-def primera_linea(resp):
-    for l in resp.splitlines():
-        if l.strip():
-            return l.strip()
-    return resp
+primera_linea = streaming.primera_linea
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]

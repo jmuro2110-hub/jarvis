@@ -109,6 +109,21 @@ def main():
         print(f"\nVoz anticipada (stream-json): {n} de {len(conv_stream)} turnos "
               f"({n / len(conv_stream) * 100:.0f}%)" + ("; sin anticipar por: " + ", ".join(
                   f"{m} {c}" for m, c in sorted(motivos.items(), key=lambda x: -x[1])) if motivos else ""))
+    barge = [f for f in filas if f["etapa"] == "barge_deteccion"]
+    if barge:
+        ok = sum(f.get("motivo") == "confirmado" for f in barge)
+        rech = {}
+        for f in barge:
+            if f.get("motivo") != "confirmado":
+                rech[f.get("motivo", "?")] = rech.get(f.get("motivo", "?"), 0) + 1
+        tipos = {}
+        for f in filas:
+            if f["etapa"] == "barge_tipo":
+                tipos[f.get("motivo", "?")] = tipos.get(f.get("motivo", "?"), 0) + 1
+        print(f"\nBarge-in: {len(barge)} candidatos, {ok} interrupciones confirmadas"
+              + ("; rechazados: " + ", ".join(f"{m} {c}" for m, c in sorted(rech.items(), key=lambda x: -x[1]))
+                 if rech else "")
+              + ("; tipos: " + ", ".join(f"{m} {c}" for m, c in sorted(tipos.items())) if tipos else ""))
     conversaciones(dias)
 
     poco = sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
@@ -122,6 +137,8 @@ def main():
           "\nStream (upgrade 05): claude_primer_texto / claude_primera_frase / tts_inicio / claude_resultado"
           "\ncuentan desde que se lanzó claude; respuesta_completa desde que JP terminó de hablar."
           "\ntts_inicio en voz anticipada = se lanzó el hijo de voz (el `say` real arranca ~0.1–0.3 s después)."
+          "\nUpgrade 06: claude_salida = claude cerrado; ahorro_result = salida − tts_inicio (observado);"
+          "\nbarge_parada se estima con el reloj de los bloques de audio."
           "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido.")
 
 if __name__ == "__main__":
