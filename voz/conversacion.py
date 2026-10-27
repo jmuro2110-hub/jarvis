@@ -16,7 +16,11 @@ IDLE, ACTIVATED, PROCESSING, SPEAKING, FOLLOW_UP, CLOSED = (
     "IDLE", "ACTIVATED", "PROCESSING", "SPEAKING", "FOLLOW_UP", "CLOSED")
 
 # Cierre manual: frases inequívocas, con o sin «Jarvis». Nunca "no" ni "gracias".
-CIERRE_RE = re.compile(r"^(?:(?:oye |hey )?jarvis\W*)?(terminamos|cierra la conversaci[oó]n|eso es todo)"
+# Groq a veces oye «cierro» por «cierra»: se aceptan esas variantes, pero nunca «cierra»/«cierro» a secas.
+CIERRE_RE = re.compile(r"^(?:(?:oye |hey )?jarvis\W*)?"
+                       r"(terminamos|eso es todo|"
+                       r"(?:ya )?(?:cierra|cierro|cerremos) la conversaci[oó]n|"
+                       r"ci[eé]rrala|cerremos|ya cierra)"
                        r"(?:\W*jarvis)?$")
 
 # Categorías de comando rápido que terminan la conversación.

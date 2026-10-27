@@ -15,7 +15,7 @@
 - En la ventana: voz por energía → Groq (o faster-whisper `small` si no hay llave), una sola transcripción por intervención; sin Whisper base. Fantasmas y ruido no cuentan turno ni reinician los 15 s; dos transcripciones vacías seguidas cierran.
 - Si otra voz de Jarvis (vigía, resumen, modo) suena durante la ventana (`voz.lock` tomado o tocado, o `estado.json` = hablando), ese audio se descarta.
 - En plática, "siguiente"/"anterior" solo cambian canción si dice "canción" o justo después de otro comando de Spotify; "ya" y "para" solos van al cerebro.
-- **Cierre:** "terminamos", "cierra la conversación" o "eso es todo" (con o sin «Jarvis») → sonido Bottle, sin frase. También cierran: ⌃⌥. o "cállate" (bandera `~/.jarvis/cerrar_conversacion`), "resumen", modo dormir, un error de voz. Cerrar la ventana NO borra la sesión de Claude (sigue 30 min).
+- **Cierre:** "terminamos", "cierra la conversación" o "eso es todo" (con o sin «Jarvis»; también "cierro/cerremos/ya cierra la conversación", "ciérrala", "cerremos", "ya cierra" — nunca "cierra" a secas) → sonido Bottle, sin frase. También cierran: ⌃⌥. o "cállate" (bandera `~/.jarvis/cerrar_conversacion`), "resumen", modo dormir, un error de voz. Cerrar la ventana NO borra la sesión de Claude (sigue 30 min).
 - HUD: anillo verde pequeño y sin texto = esperando seguimiento (se oculta solo a los timeout + 2 s).
 - ⌃⌥Espacio (texto) no abre ni toca la conversación de voz.
 - Telemetría: `~/.jarvis/conversaciones.jsonl` (un evento por transición, sin texto ni audio); resumen en `jv latencia`. Pruebas: `tests/test_conversacion.py`.

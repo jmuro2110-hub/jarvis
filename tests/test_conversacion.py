@@ -406,6 +406,19 @@ class T19_CierreManual(Base):
         for frase in ("no", "gracias", "no, gracias", "ya", "terminamos la tarea"):
             self.assertFalse(cv.es_cierre(frase), frase)
 
+    def test_variantes_de_groq(self):
+        for frase in ("Cierro la conversación.", "ciérrala", "Ciérrala, Jarvis", "cerremos", "Cerremos la conversación",
+                      "ya cierra", "Ya cierra la conversación", "Jarvis, ya cierra"):
+            self.assertTrue(cv.es_cierre(frase), frase)
+        for frase in ("cierra", "cierro", "cierra Spotify", "ya cierra la ventana", "cerremos el trato",
+                      "cierro la puerta"):
+            self.assertFalse(cv.es_cierre(frase), frase)
+
+    def test_cierro_en_conversacion_cierra_local(self):
+        self.desde_idle("Jarvis, qué hora es", ("di", "Cierro la conversación."), ("di", "abre spotify"))
+        self.assertEqual(self.cierre(), "manual")
+        self.assertEqual(self.pensado, [])
+
     def test_cierra_sin_cerebro_y_sin_hablar(self):
         self.desde_idle("Jarvis, qué hora es", ("di", "Eso es todo, Jarvis"), ("di", "abre spotify"))
         self.assertEqual(self.cierre(), "manual")

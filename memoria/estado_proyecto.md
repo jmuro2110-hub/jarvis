@@ -58,9 +58,9 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 05 (stream-json, voz anticipada, captura tras «Jarvis») hecho: 207 pruebas automáticas OK y benchmark real. **Prueba física con JP: PENDIENTE.**
+- Upgrade 05 (stream-json, voz anticipada, captura tras «Jarvis») hecho: 209 pruebas OK, benchmark real y **prueba física aprobada (2026-10-27)**: A voz anticipada 0.57 s antes del resultado; B con herramientas sin adelantarse; C «Jarvis» + pausa + «Dime tres planetas» completa; D «Abre Spotify» durante el tin completa; E contexto (Júpiter); F cierre y nada sin activación; G ruta JSON con `claude_streaming: false` (regresado a true). El cierre manual ahora acepta «cierro/ciérrala/cerremos/ya cierra» (Groq oyó «Cierro»).
 - Siguiente: barge-in (interrumpir a Jarvis con la voz mientras habla). NO se empezó.
-- Límites abiertos: sin barge-in; la voz anticipada solo aplica a preguntas de conocimiento general (lo demás espera el resultado, a propósito); el proceso de Claude tarda ~0.4–0.7 s en salir después de `result` y la ruta normal todavía espera esa salida; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
+- Límites abiertos: sin barge-in; la primera detección de una frase larga con Whisper base tras reiniciar tardó 6.2 s (arranque en frío del modelo); la voz anticipada solo aplica a preguntas de conocimiento general (lo demás espera el resultado, a propósito); el proceso de Claude tarda ~0.4–0.7 s en salir después de `result` y la ruta normal todavía espera esa salida; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.
