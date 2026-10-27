@@ -17,6 +17,12 @@ import pensar as pensar_mod       # noqa: E402
 import comun                      # noqa: E402
 import jarvis_voz as voz          # noqa: E402
 
+
+def claude_json(texto):
+    """Salida de `claude -p --output-format json` (upgrade 03)."""
+    return json.dumps({"type": "result", "result": texto, "is_error": False,
+                       "session_id": "11111111-1111-4111-8111-111111111111", "duration_ms": 1000})
+
 PY_SISTEMA = "/usr/bin/python3"   # el hook corre con este (3.9), no con uv
 
 
@@ -267,7 +273,7 @@ class G_Cerebros(Base):
             llamadas.append((cmd, kw))
             if cmd[0] == "claude":
                 return subprocess.CompletedProcess(cmd, 0 if claude_ok else 1,
-                                                   "Señor." if claude_ok else "You've hit your limit", "")
+                                                   claude_json("Señor.") if claude_ok else "You've hit your limit", "")
             pathlib.Path(cmd[cmd.index("-o") + 1]).write_text("Respaldo, señor.")
             return subprocess.CompletedProcess(cmd, 0, "", "")
         m = mock.MagicMock(); m.run.side_effect = run

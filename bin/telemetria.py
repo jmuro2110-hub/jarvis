@@ -1,7 +1,8 @@
 """Telemetría de latencia de Jarvis: cuánto tarda cada etapa de una petición.
 
 Solo librería estándar. Guarda en ~/.jarvis/metricas_latencia.jsonl una línea por etapa:
-fecha, id, origen, etapa, ms, ruta, estado. NUNCA texto, audio, prompts ni llaves.
+fecha, id, origen, etapa, ms, ruta, estado (y "sesion" en las de Claude). NUNCA texto, audio,
+prompts ni llaves.
 Si algo falla aquí, se ignora: Jarvis sigue funcionando igual.
 
 Uso:
@@ -18,13 +19,17 @@ ARCHIVO = pathlib.Path(os.environ.get("JARVIS_METRICAS")
                        or pathlib.Path.home() / ".jarvis" / "metricas_latencia.jsonl")
 
 ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion_groq",
-          "transcripcion_local", "comando_rapido", "claude_p", "codex_exec",
+          "transcripcion_local", "comando_rapido", "claude_preparacion", "claude_p",
+          "claude_duracion", "claude_api", "claude_arranque_est", "codex_exec",
           "voz_preparacion", "total")
+# claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
+# claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")
 RUTAS = ("rapido", "claude", "codex", "ninguno")
-ORIGENES = ("voz", "texto")
+ORIGENES = ("voz", "texto", "auto")
+SESIONES = ("nueva", "reanudada")
 
-_actual = {}        # petición en curso: id, origen, t_fin (ns), ruta, total_hecho
+_actual = {}        # petición en curso: id, origen, t_fin (ns), ruta, total_hecho, sesion
 _voz_t0 = None      # cuándo empezó decir() (ns)
 
 ahora = time.perf_counter_ns
@@ -77,6 +82,15 @@ def ruta(r):
         pass
 
 
+def sesion(tipo):
+    """'nueva' o 'reanudada': se anota en las filas de Claude de esta petición."""
+    try:
+        if _actual and tipo in SESIONES:
+            _actual["sesion"] = tipo
+    except Exception:
+        pass
+
+
 def terminar():
     try:
         _actual.clear()
@@ -99,6 +113,8 @@ def registrar(nombre, ms, ruta=None, estado="exito"):
                 "etapa": nombre, "ms": round(float(ms), 1),
                 "ruta": r if r in RUTAS else None,
                 "estado": estado if estado in ESTADOS else "error"}
+        if nombre.startswith("claude_") and _actual.get("sesion") in SESIONES:
+            fila["sesion"] = _actual["sesion"]
         ARCHIVO.parent.mkdir(parents=True, exist_ok=True)
         with open(ARCHIVO, "a") as f:
             f.write(json.dumps(fila) + "\n")
@@ -153,6 +169,18 @@ def voz_empieza():
             registrar("voz_preparacion", _ms(_voz_t0))
             _voz_t0 = None
             total()
+    except Exception:
+        pass
+
+
+def desglose_claude(sub_ms, duration_ms, duration_api_ms):
+    """Lo que Claude reporta de sí mismo + la diferencia con el subproceso (arranque local estimado)."""
+    try:
+        if isinstance(duration_ms, (int, float)) and duration_ms >= 0:
+            registrar("claude_duracion", duration_ms)
+            registrar("claude_arranque_est", max(0.0, sub_ms - duration_ms))
+        if isinstance(duration_api_ms, (int, float)) and duration_api_ms >= 0:
+            registrar("claude_api", duration_api_ms)
     except Exception:
         pass
 

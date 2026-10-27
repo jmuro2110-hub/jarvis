@@ -51,27 +51,45 @@ def _continuar():
     h = _historial(1)
     return bool(h) and time.time() - h[-1]["t"] < SESION_MIN * 60 and h[-1]["cerebro"] == "claude"
 
+def _leer_json(salida):
+    """--output-format json: un objeto con result, is_error, session_id, duration_ms, duration_api_ms."""
+    try:
+        d = json.loads(salida)
+        return d if isinstance(d, dict) else None
+    except ValueError:
+        return None
+
 def claude(texto, voz):
     if not shutil.which("claude"):
         return None, "no instalado"
-    cmd = ["claude", "-p", texto]
+    t_prep = tm.ahora()
+    cmd = ["claude", "-p", texto, "--output-format", "json"]
     if _continuar():
         cmd.append("--continue")
     if voz:
         cmd += ["--append-system-prompt", INSTRUCCION_VOZ]
     cmd += ASISTENTE_CLAUDE
+    tm.registrar("claude_preparacion", tm._ms(t_prep))
     with tm.etapa("claude_p", ruta="claude") as e:      # proceso completo: arranque + API + salida
+        t0 = tm.ahora()
         try:
+            # stdin cerrado (EOF inmediato): heredado, claude -p espera 3 s "no stdin data received".
             r = subprocess.run(cmd, cwd=JARVIS, capture_output=True, text=True, timeout=300,
-                               env=entorno_asistente())
+                               stdin=subprocess.DEVNULL, env=entorno_asistente())
         except subprocess.TimeoutExpired:
             e.estado = "timeout"
             return None, "tardó demasiado"
+        sub_ms = tm._ms(t0)
         salida, err = (r.stdout or "").strip(), (r.stderr or "").strip()
-        if r.returncode != 0 or not salida or (LIMITE_RE.search(salida) and len(salida) < 400):
+        d = _leer_json(salida)
+        if d is not None:
+            tm.desglose_claude(sub_ms, d.get("duration_ms"), d.get("duration_api_ms"))
+        res = (d.get("result") or "").strip() if d and isinstance(d.get("result"), str) else ""
+        if r.returncode != 0 or d is None or d.get("is_error") or not res \
+                or (LIMITE_RE.search(res) and len(res) < 400):
             e.estado = "error"
-            return None, (salida or err)[:300]
-    return salida, None
+            return None, (res or salida or err)[:300]
+    return res, None
 
 def _codex_valido(c):
     try:

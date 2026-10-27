@@ -22,6 +22,12 @@ GUARDAR_ORIGINAL = pensar_mod._guardar
 CAMPOS = {"fecha", "id", "origen", "etapa", "ms", "ruta", "estado"}
 
 
+def claude_json(texto, is_error=False, session_id="11111111-1111-4111-8111-111111111111"):
+    """Lo que imprime `claude -p --output-format json` (upgrade 03)."""
+    return json.dumps({"type": "result", "result": texto, "is_error": is_error, "session_id": session_id,
+                       "duration_ms": 1500, "duration_api_ms": 1200})
+
+
 def falso_subprocess(run):
     m = mock.MagicMock()
     m.run.side_effect = run
@@ -110,14 +116,14 @@ class B_Claude(Base):
         llamadas = []
         def run(cmd, **kw):
             llamadas.append((cmd, kw))
-            return subprocess.CompletedProcess(cmd, 0, "Señor, todo en orden.\n\nDetalle.\n", "")
+            return subprocess.CompletedProcess(cmd, 0, claude_json("Señor, todo en orden.\n\nDetalle.\n"), "")
         with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)), \
              mock.patch.object(pensar_mod, "_continuar", return_value=True):
             tm.nueva("voz", tm.ahora())
             resp, cerebro = pensar_mod.pensar("cómo vamos", voz=True)
         self.assertEqual((resp, cerebro), ("Señor, todo en orden.\n\nDetalle.", "claude"))
         cmd, kw = llamadas[0]
-        self.assertEqual(cmd, ["claude", "-p", "cómo vamos", "--continue",
+        self.assertEqual(cmd, ["claude", "-p", "cómo vamos", "--output-format", "json", "--continue",
                                "--append-system-prompt", pensar_mod.INSTRUCCION_VOZ,
                                *pensar_mod.ASISTENTE_CLAUDE])          # candados del upgrade 02
         self.assertEqual(kw["timeout"], 300)
@@ -155,9 +161,12 @@ class C_Fallback(Base):
         self.assertEqual(e["total"]["ruta"], "codex")
 
 
+SALIDA_OK = claude_json("Aquí sigo, señor.")      # fuera de la prueba: una de ellas rompe json.dumps
+
+
 class D_Tolerancia(Base):
     def _pensar_ok(self):
-        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "Aquí sigo, señor.", "")
+        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, SALIDA_OK, "")
         with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)):
             tm.nueva("voz", tm.ahora())
             return pensar_mod.pensar("hola", voz=True)
@@ -182,7 +191,7 @@ class D_Tolerancia(Base):
 class E_Privacidad(Base):
     def test_no_guarda_contenido(self):
         secreto_p, secreto_r = "PREGUNTA_SECRETA_7731", "RESPUESTA_SECRETA_9912"
-        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, secreto_r, "")
+        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, claude_json(secreto_r), "")
         with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)), \
              mock.patch.dict(os.environ, {"GROQ_API_KEY": "gsk_SECRETA"}):
             tm.nueva("voz", tm.ahora())

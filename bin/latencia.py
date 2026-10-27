@@ -66,13 +66,19 @@ def main():
     por_estado = agrupar(cerebro, lambda f: f"{f['etapa']} · {f['estado']}")
     tabla("Cerebro por resultado:", sorted(por_estado.items()))
 
+    desglose = [f for f in filas if f["etapa"].startswith("claude_")]
+    por_sesion = agrupar(desglose, lambda f: f"{f['etapa']} · {f.get('sesion') or '?'}")
+    tabla("Claude por sesión (nueva / reanudada):", sorted(por_sesion.items()))
+
     poco = sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
     if poco:
         print(f"\nOjo: pocas muestras en {', '.join(poco)}. "
               f"p50 necesita {MIN_P50}+ y p90 {MIN_P90}+; con menos solo se muestran mín y máx.")
-    print("\nNotas: 'claude_p' y 'codex_exec' son el subproceso completo (arranque + red + modelo + salida);"
-          "\nno separan el arranque en frío. 'total' termina cuando se lanza la voz (say/afplay),"
-          "\nno cuando suena el primer sonido.")
+    print("\nNotas: 'claude_p' y 'codex_exec' son el subproceso completo (arranque + red + modelo + salida)."
+          "\n'claude_duracion' y 'claude_api' los reporta Claude en su JSON; 'claude_arranque_est' ="
+          "\nclaude_p − claude_duracion es una ESTIMACIÓN del arranque local, no una medida exacta."
+          "\nTiempo a primer texto: todavía no medible (requiere stream-json, upgrade 04)."
+          "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido.")
 
 if __name__ == "__main__":
     main()
