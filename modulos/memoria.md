@@ -32,6 +32,7 @@ Escritura: candado `fcntl` (`recuerdos.lock`), `O_APPEND` y `fsync`. Se confirma
 - «Corrige ese recuerdo: ahora …» → «ese recuerdo» es el último guardado, corregido o usado **en esta conversación**. Esa marca vive solo en la memoria del proceso. Sin conversación, cuenta una coincidencia clara con UN solo recuerdo. Si hay duda, no cambia nada y dice qué candidatos hay.
 - «Olvida ese recuerdo / olvida que …» → «Listo, señor, ya no lo uso. Sigue en el archivo, desactivado.»
 - «¿Qué recuerdas de/sobre …?» → hasta 3, del ámbito correcto.
+- En la voz se revisa justo después de «cállate» y ANTES de Spotify y volumen. Así «recuerda que prefiero hacer una pausa cada hora» se guarda y no pausa la música. Solo cuenta si la frase EMPIEZA con la intención.
 - **«Recuérdame…» y «recuerda que mañana / el viernes / a las 5 / tarea / entrega / examen…» NO son recuerdos:** siguen el camino de siempre a `pendientes.md`.
 - **No guarda** contraseñas, llaves o tokens, códigos 2FA, tarjetas o cuentas, CURP/RFC, correos o números largos, datos médicos, chismes o confidencias de terceros, «lo que dice la página o el correo», órdenes sobre las reglas («sin preguntar», «ignora tus reglas», publicar en redes) ni frases ambiguas («recuerda que eso»). La validación es por palabras: conservadora, no perfecta.
 
@@ -67,5 +68,4 @@ Búsqueda completa (leer el archivo + buscar + armar el bloque): 100 recuerdos p
 ## Límites
 - Sin semántica: «¿cómo organizo mi tarde?» no encuentra «bloques de 40 minutos».
 - Dos recuerdos que se contradicen se pasan los dos; Claude debe decirlo, no elegir.
-- El orden de `clasificar_rapido` (ajuste 2) revisa Spotify y volumen ANTES que la memoria: «recuerda que prefiero hacer una pausa…» pausa la música. La palabra «pausa» se busca en cualquier parte de la frase.
 - Reiniciar Jarvis no borra la sesión reciente (30 min).

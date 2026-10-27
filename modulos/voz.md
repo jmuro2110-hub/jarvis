@@ -38,4 +38,4 @@
 - Config: `barge_in` (false = como el 05), `hablar_al_result` (false = espera la salida). Pruebas: `tests/test_barge_in.py`.
 
 ## Upgrade 07 (memoria)
-- «Recuerda que… / corrige ese recuerdo… / olvida… / ¿qué recuerdas de…?» es comando rápido (`clasificar_rapido`, después de hora y antes de modos/abrir): local, sin Claude, con confirmación corta. También entra por la orden nueva del barge-in. «Recuérdame…» sigue yendo a pendientes. `conv.ultimo_recuerdo` (solo en memoria) resuelve «ese recuerdo». Ver `modulos/memoria.md`.
+- «Recuerda que… / corrige ese recuerdo… / olvida… / ¿qué recuerdas de…?» es comando rápido (`clasificar_rapido`, justo después de callar y antes de Spotify/volumen, a pedido de JP: «recuerda que… pausa…» se guarda, no pausa la música): local, sin Claude, con confirmación corta. También entra por la orden nueva del barge-in. «Recuérdame…» sigue yendo a pendientes. `conv.ultimo_recuerdo` (solo en memoria) resuelve «ese recuerdo». Ver `modulos/memoria.md`.

@@ -61,7 +61,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 ## Paso actual
 - Upgrade 07 (memoria) con código, pruebas automáticas (338 OK) y commit hechos. **Falta la prueba física A–G con JP.**
 - Upgrade 06 terminado (2026-10-27): barge-in («cállate» ≈1.6 s, «espera» ≈2.2 s), cero falsas interrupciones con música, voz al result 0.39–0.52 s antes, pendientes solo personales.
-- Límites abiertos (07): búsqueda léxica, sin semántica; dos recuerdos que se contradicen se pasan juntos; con el orden del ajuste 2, «recuerda que… pausa…» pausa Spotify; la validación de privacidad es por palabras (conservadora); reiniciar Jarvis no borra la sesión reciente (30 min).
+- Límites abiertos (07): búsqueda léxica, sin semántica; dos recuerdos que se contradicen se pasan juntos; la validación de privacidad es por palabras (conservadora); reiniciar Jarvis no borra la sesión reciente (30 min).
 - Límites abiertos (06 y antes): barge-in sin cancelación de eco y con piso de ruido propio: con música alta casi no hay candidatos; callarlo tarda ~1.5–2.2 s; «no, mejor X» con la voz sonando solo está probado en automático; la primera detección con Whisper base tras reiniciar tardó 6.2 s; la voz anticipada solo aplica a conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)

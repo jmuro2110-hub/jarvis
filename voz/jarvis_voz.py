@@ -117,6 +117,11 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
     c = config()
     if re.fullmatch(r"(cállate|silencio|basta)" if seguimiento else r"(cállate|silencio|ya|basta|para)", t):
         callar(); return "", "callar"
+    # Upgrade 07: memoria explícita, local, sin Claude. Antes de Spotify/volumen: «recuerda que… pausa…» se guarda
+    # (solo casa si la frase EMPIEZA con «recuerda que…»/«corrige…»/«olvida…»/«¿qué recuerdas…?»).
+    mem = memoria.atender(original, "voz", ref)
+    if mem is not None:
+        return mem[0], "memoria"
     if re.search(r"\b(pausa|pausar|para la música|detén la música|quita la música)\b", t):
         osa('tell application "Spotify" to pause'); return "Música en pausa, señor.", "spotify"
     if (SIGUIENTE_CONV.search(t) or (t == "siguiente" and previo == "spotify")) if seguimiento else \
@@ -143,9 +148,6 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
         return pend, "pendientes"
     if re.fullmatch(r"(qué hora es|la hora|dime la hora)", t):
         n = datetime.datetime.now(); return f"Son las {n.hour}:{n.minute:02d}, señor.", "hora"
-    mem = memoria.atender(original, "voz", ref)       # upgrade 07: memoria explícita, local, sin Claude
-    if mem is not None:
-        return mem[0], "memoria"
     m = re.search(r"\bmodo (\w+)", t)
     if m and re.search(r"\b(desactiva|quita|apaga|sal del|termina|cancela|ya no)\b", t):
         m = None        # "desactiva el modo gamer": no lo actives; que lo resuelva el cerebro

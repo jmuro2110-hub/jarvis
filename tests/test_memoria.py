@@ -647,6 +647,23 @@ class T43_BargeOrden(Base):
         self.assertEqual((r, cat), (f"Registrado, señor: {ESTUDIO}.", "memoria"))
 
 
+class PausaNoEsSpotify(Base):
+    def test_recuerda_pausa_se_guarda(self):
+        osa = mock.MagicMock(return_value=subprocess.CompletedProcess([], 0, "", ""))
+        with mock.patch.object(voz, "osa", osa), mock.patch.object(voz, "config", lambda: self.cfg), \
+             mock.patch.object(voz, "callar") as callar:
+            r, cat = voz.clasificar_rapido("Jarvis, recuerda que prefiero hacer una pausa cada hora")
+            self.assertEqual((r, cat), ("Registrado, señor: prefiero hacer una pausa cada hora.", "memoria"))
+            osa.assert_not_called()
+            callar.assert_not_called()
+            self.assertEqual([x.contenido for x in mem.activos()], ["prefiero hacer una pausa cada hora"])
+            # lo demás sigue igual: «pausa» a secas es Spotify y «cállate» calla antes que nada
+            self.assertEqual(voz.clasificar_rapido("pausa la música")[1], "spotify")
+            self.assertEqual(voz.clasificar_rapido("sube el volumen")[1], "volumen")
+            self.assertEqual(voz.clasificar_rapido("cállate")[1], "callar")
+        self.assertEqual(len(mem.activos()), 1)
+
+
 class EseRecuerdoEnConversacion(Base):
     def test_procesar_anota_en_conv(self):
         conv = cv.Conversacion(); conv.activar(); conv.iniciar_turno()
