@@ -20,7 +20,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 ## Ya funciona (2026-10-23/24)
 - Base: CLAUDE.md (personalidad estilo Jarvis/Tony, reglas), memoria, módulos, git local.
 - Voz: "Jarvis, …" de un jalón o solo "Jarvis" + tin. Detección local Whisper base; orden con Groq whisper-large-v3-turbo (gratis); filtro de frases fantasma.
-- Cerebro: `claude -p` (con --continue si <30 min) y respaldo automático con Codex (ChatGPT). Codex con sesión iniciada.
+- Cerebro: `claude -p` con sesiones explícitas (upgrade 03): personal y auto, `--session-id` nueva o `--resume` del ID exacto si <30 min; nunca `--continue`. Respaldo automático con Codex (ChatGPT), aislado y autoverificado. Codex con sesión iniciada.
 - Comandos rápidos sin IA: apps, Spotify, volumen, hora, modos (gamer/estudio/trabajo/dormir), rutina, panel.
 - Dos mundos: páginas se abren en el perfil de Chrome correcto (Classroom/Meet → escuela; lo demás → personal jmuro2110). Probado OK.
 - Iniciativa: resumen matutino 7:30, vigía (Minecraft 1/2/3 h, entregas), avisos Mac + iPhone (ntfy, canal en ~/.jarvis/secretos.env).
