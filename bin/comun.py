@@ -17,6 +17,10 @@ DEFAULTS = {
     "rutina_url": "https://jmuro2110-hub.github.io/rutina/",
     "facial_url": "",
     "modos": {},
+    "conversacion_continua": True,      # upgrade 04: seguir la plática sin repetir «Jarvis»
+    "timeout_seguimiento_seg": 15,
+    "max_turnos": 5,
+    "duracion_maxima_seg": 180,
 }
 
 def path_env():

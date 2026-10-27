@@ -31,15 +31,18 @@ class Oido:
             try: self.cola.get_nowait()
             except queue.Empty: return
 
-    def frase(self, fin_silencio=0.7, max_dur=15.0, espera_inicio=None, disparador=None, nivel_cb=None):
+    def frase(self, fin_silencio=0.7, max_dur=15.0, espera_inicio=None, disparador=None, nivel_cb=None,
+              cerrar=None):
         """Regresa el audio de la siguiente frase (float32), None si nadie habló a tiempo,
-        o "DISPARO" si se presionó el atajo de teclado."""
+        "DISPARO" si se presionó el atajo de teclado o "CERRAR" si existe la bandera `cerrar`."""
         previo = collections.deque(maxlen=4)
-        voz, hablando, silencio, inicio, con_voz = [], False, 0, time.time(), 0
+        voz, hablando, silencio, inicio, con_voz = [], False, 0, time.monotonic(), 0
         while True:
             if disparador is not None and pathlib.Path(disparador).exists():
                 pathlib.Path(disparador).unlink(missing_ok=True)
                 return "DISPARO"
+            if cerrar is not None and pathlib.Path(cerrar).exists():
+                return "CERRAR"             # quien llama la borra
             try:
                 b = self.cola.get(timeout=0.3)
             except queue.Empty:
@@ -57,7 +60,7 @@ class Oido:
                 else:
                     self.ruido = 0.97 * self.ruido + 0.03 * rms
                     previo.append(b)
-                    if espera_inicio and time.time() - inicio > espera_inicio:
+                    if espera_inicio and time.monotonic() - inicio > espera_inicio:
                         return None
             else:
                 voz.append(b)

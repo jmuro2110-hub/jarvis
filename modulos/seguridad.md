@@ -17,3 +17,7 @@
 - Si el ID ya no existe ("No conversation found") o el archivo está corrupto → sesión nueva del asistente, nunca la última global. Si Claude falla y responde Codex, la sesión se olvida (la próxima empieza limpia).
 - El historial lleva `origen`; a Codex solo le llega contexto personal.
 - **Límite abierto (no se arregla aquí):** las sesiones del asistente y las de desarrollo viven en la misma carpeta de proyecto de Claude (~/.claude/projects/…Jarvis). Si JP usa `claude --continue` o `/resume` a mano dentro de Jarvis, puede caer en una sesión del asistente (contexto de plática, no permisos: el modo desarrollo no carga el guardia). El asistente nunca cae en una de desarrollo.
+
+## Conversación continua (upgrade 04)
+- La ventana de seguimiento solo existe después de una activación legítima («Jarvis» o ⌃⌥J) y se cierra sola por tiempo, turnos, callar o modo dormir. Desde IDLE nada se manda a Groq sin «Jarvis».
+- Una conversación NO autoriza nada: cada turno pasa por `pensar()` con los candados del 02 y la sesión personal del 03. Enviar, borrar, gastar y publicar siguen bloqueados.

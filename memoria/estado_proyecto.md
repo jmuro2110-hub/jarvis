@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-26 (upgrade 03: latencia, sesiones, Codex aislado)
+**Última actualización:** 2026-10-27 (upgrade 04: conversación continua por voz)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -33,6 +33,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Upgrade 03 (2026-10-26): `claude -p` con stdin cerrado (se acabó la espera de 3 s) y `--output-format json`. Respuesta trivial: 5.1–11.9 s → 2.0–3.9 s (n=4 antes, 9 después). Telemetría nueva: claude_duracion, claude_api (solo sesión nueva), claude_arranque_est (estimación ≈0.8–1.4 s) y sesión nueva/reanudada en `jv latencia`.
 - Sesiones separadas (`bin/sesiones.py`, ~/.jarvis/sesiones.json 0600): personal (voz + texto) y auto (resumen matutino), con ID explícito (`--session-id` / `--resume`), 30 min de vigencia, nunca `--continue`. El historial lleva `origen`; a Codex solo le llega contexto personal.
 - Codex de respaldo aislado: sin herramientas + perfil de permisos `jarvis_asistente` con ~/.jarvis denegado por Seatbelt (probado con `codex exec` real y canario). Autoverificación por versión (0.164.0) y canario; si falla, respaldo deshabilitado con aviso. 88 pruebas (43 viejas + 45 nuevas) OK.
+- Conversación continua por voz (upgrade 04, 2026-10-27): tras «Jarvis» o ⌃⌥J, ventana de 15 s para seguir sin repetirlo (máx. 5 turnos / 3 min, en config.json). Máquina de estados en `voz/conversacion.py`, mismo hilo, sin procesos nuevos. Comandos rápidos en plática (con reglas para "siguiente"/"anterior"/"ya"/"para"), cierre manual con sonido, ⌃⌥. cierra, descarta otras voces de Jarvis, HUD verde discreto. Contexto por la sesión personal del 03. 61 pruebas nuevas + 88 previas = 149 OK.
 
 ## Decisiones tomadas
 - No IA pesada local (Mac Intel). Nube para lo pesado, local para lo simple.
@@ -49,17 +50,17 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - [ ] Subir Jarvis a GitHub privado (jmuro2110-hub/jarvis) para que ChatGPT lea el código real.
 
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
-1. **Conversación continua**: seguir la plática sin repetir "Jarvis", entender "esa/la primera", barge-in (interrumpirlo). ← PRIORIDAD
-2. **Velocidad**: medir latencia por etapa; el arranque en frío de `claude -p` es el sospechoso principal.
+1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Pendiente: barge-in (interrumpirlo mientras habla).
+2. **Velocidad**: medida y stdin resuelto (01/03). Siguiente: stream-json para empezar a hablar antes (próximo upgrade).
 3. **Memoria que aprende**: permanente vs reciente vs recuerdos relevantes.
 4. **Iniciativa con criterio**: prioridades, silencio, no repetir avisos, contexto (modo, pendientes).
 5. **Autonomía real en macOS** con candados por código (no solo instrucciones).
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
 
 ## Paso actual
-- Upgrade 03 terminado y probado (commits 03A a0e0e5f, 03B 122f43a, 03C 62ac206). NO se empezó el 04.
-- Siguiente: Upgrade 04 = stream-json (tiempo a primer texto, empezar a hablar antes) / conversación continua.
-- Límites abiertos: sesiones del asistente y de desarrollo comparten la carpeta de proyecto de Claude (un `claude --continue` a mano puede caer en una del asistente; al revés no); WebFetch puede sacar datos en una URL; en Codex queda `apply_patch` y recursos MCP dentro del modo código, que falla cerrado (host apagado) y sin servidores MCP; si se actualiza Codex el respaldo se apaga solo hasta volver a probar y subir `CODEX_VERIFICADO`; el desarrollo interactivo sigue con permisos amplios a propósito.
+- Upgrade 04 (conversación continua) hecho y con pruebas automáticas en verde (149). **Validación física con el micrófono PD100X: PENDIENTE** hasta que JP haga la prueba guiada.
+- Siguiente: stream-json (empezar a hablar antes) y después barge-in. NO se empezó.
+- Límites abiertos: sin barge-in (no se le puede interrumpir con la voz mientras habla; sí con ⌃⌥.); sesiones del asistente y de desarrollo comparten la carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
 
 ## Fase B — Negocio (después del upgrade)
 - Meta $1,500,000 MXN; fecha_meta 2027-10-23 en memoria/dinero.json.

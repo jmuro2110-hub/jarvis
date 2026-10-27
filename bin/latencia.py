@@ -37,6 +37,34 @@ def agrupar(filas, clave):
         g.setdefault(clave(f), []).append(float(f["ms"]))
     return g
 
+def conversaciones(dias):
+    """Resumen corto de la conversación continua (upgrade 04)."""
+    ev = tm.leer_conversaciones(dias)
+    print("\nConversación continua:")
+    cierres = [f for f in ev if f["evento"] == "cierre"]
+    if not ev:
+        print("  (sin conversaciones)"); return
+    n = len({f["conv"] for f in ev if f["evento"] == "activada"})
+    turnos = [f["turno"] for f in cierres]
+    print(f"  conversaciones: {n}   turnos promedio: {sum(turnos) / len(turnos):.1f}" if turnos
+          else f"  conversaciones: {n}")
+    motivos = {}
+    for f in cierres:
+        motivos[f.get("motivo", "?")] = motivos.get(f.get("motivo", "?"), 0) + 1
+    if motivos:
+        print("  cierres: " + ", ".join(f"{m} {c}" for m, c in sorted(motivos.items(), key=lambda x: -x[1])))
+    det = sum(f["evento"] == "seguimiento_detectado" for f in ev)
+    desc = sum(f["evento"] == "seguimiento_descartado" for f in ev)
+    if det + desc:
+        print(f"  seguimientos: {det} atendidos, {desc} descartados ({desc / (det + desc) * 100:.0f}%)")
+    gestor = sorted(f["ms"] for f in ev if f["evento"] == "seguimiento_abre" and "ms" in f)
+    if gestor:
+        print(f"  latencia del gestor (fin de voz → escuchando): mín {_f(gestor[0])}, máx {_f(gestor[-1])}")
+    esperas = sorted(f["ms"] for f in ev if f["evento"] == "seguimiento_detectado" and "ms" in f)
+    if esperas:
+        print(f"  fin de respuesta → nueva intervención: mín {_f(esperas[0])}, máx {_f(esperas[-1])}")
+
+
 def main():
     dias = None
     if "--dias" in sys.argv:
@@ -70,6 +98,8 @@ def main():
     desglose = [f for f in filas if f["etapa"].startswith("claude_")]
     por_sesion = agrupar(desglose, lambda f: f"{f['etapa']} · {f.get('sesion') or '?'}")
     tabla("Claude por sesión (nueva / reanudada):", sorted(por_sesion.items()))
+
+    conversaciones(dias)
 
     poco = sorted(n for n, v in {**por_etapa, **por_ruta}.items() if len(v) < MIN_P90)
     if poco:

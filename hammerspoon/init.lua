@@ -9,6 +9,7 @@ local JARVIS = HOME .. "/Documents/Jarvis"
 local CASA   = HOME .. "/.jarvis"
 local JV     = JARVIS .. "/bin/jv"
 local CIAN   = { red = 0.31, green = 0.82, blue = 1.0, alpha = 1 }
+local VERDE  = { red = 0.35, green = 0.85, blue = 0.55, alpha = 0.85 }   -- esperando seguimiento
 
 hs.console.clearConsole()
 hs.window.animationDuration = 0
@@ -20,6 +21,7 @@ local ETIQUETAS = {
   escuchando = "Te escucho, señor…",
   pensando   = "Procesando…",
   hablando   = "",
+  seguimiento = "",   -- conversación continua: solo el anillo verde, sin texto
 }
 
 local function ocultarHud()
@@ -35,9 +37,12 @@ local function mostrarHud(estado, texto)
     etiqueta = "Procesando: " .. texto
   end
   if #etiqueta > 140 then etiqueta = etiqueta:sub(1, 137) .. "…" end
+  local seguimiento = estado == "seguimiento"
+  local color = seguimiento and VERDE or CIAN
 
   local pantalla = hs.screen.mainScreen():frame()
   local ancho, alto = math.min(620, pantalla.w - 80), 64
+  if seguimiento then ancho = 68 end            -- discreto: solo el anillo
   local x = pantalla.x + (pantalla.w - ancho) / 2
   local y = pantalla.y + pantalla.h - alto - 40
   hud = hs.canvas.new({ x = x, y = y, w = ancho, h = alto })
@@ -47,17 +52,19 @@ local function mostrarHud(estado, texto)
     { type = "rectangle", action = "fill", roundedRectRadii = { xRadius = 18, yRadius = 18 },
       fillColor = { red = 0.02, green = 0.05, blue = 0.09, alpha = 0.92 } },
     { type = "rectangle", action = "stroke", roundedRectRadii = { xRadius = 18, yRadius = 18 },
-      strokeColor = { red = 0.31, green = 0.82, blue = 1.0, alpha = 0.55 }, strokeWidth = 1.5 },
+      strokeColor = { red = color.red, green = color.green, blue = color.blue, alpha = 0.55 }, strokeWidth = 1.5 },
     { type = "circle", center = { x = 34, y = alto / 2 }, radius = 14, action = "stroke",
-      strokeColor = CIAN, strokeWidth = 3,
-      withShadow = true, shadow = { blurRadius = 12, color = CIAN, offset = { h = 0, w = 0 } } },
-    { type = "circle", center = { x = 34, y = alto / 2 }, radius = 5, action = "fill", fillColor = CIAN },
-    { type = "text", text = etiqueta, frame = { x = 62, y = 12, w = ancho - 78, h = alto - 16 },
+      strokeColor = color, strokeWidth = 3,
+      withShadow = true, shadow = { blurRadius = 12, color = color, offset = { h = 0, w = 0 } } },
+    { type = "circle", center = { x = 34, y = alto / 2 }, radius = 5, action = "fill", fillColor = color },
+    { type = "text", text = etiqueta, frame = { x = 62, y = 12, w = math.max(1, ancho - 78), h = alto - 16 },
       textColor = { white = 0.92, alpha = 1 }, textSize = 15, textFont = ".AppleSystemUIFont" }
   )
   hud:show(0.15)
   if hudTimer then hudTimer:stop() end
-  hudTimer = hs.timer.doAfter(estado == "hablando" and 30 or 120, ocultarHud)
+  local espera = estado == "hablando" and 30 or 120
+  if seguimiento then espera = (tonumber(texto) or 15) + 2 end   -- se oculta aunque el ciclo muera
+  hudTimer = hs.timer.doAfter(espera, ocultarHud)
 end
 
 local function leerEstado()

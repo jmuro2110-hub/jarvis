@@ -55,24 +55,32 @@ def elevenlabs(texto, c, s):
     return True
 
 def decir(texto, forzar=False):
+    """Habla y regresa cuando terminó de sonar. True si sonó bien (False si say falló o lo callaron)."""
     tm.voz_preparando()
     texto = limpiar_para_voz(texto)
     if not texto:
-        return
+        return True
     c, s = config(), secretos()
     with open(CASA / "voz.lock", "w") as candado:
         fcntl.flock(candado, fcntl.LOCK_EX)          # nunca dos voces encimadas
         estado("hablando", texto)
+        ok = True
         if not elevenlabs(texto, c, s):
             cmd = ["say", "-r", "185"]
             v = voz_mac(c)
             if v:
                 cmd += ["-v", v]
             tm.voz_empieza()
-            subprocess.run(cmd + [texto])
+            ok = subprocess.run(cmd + [texto]).returncode == 0
         estado("listo")
+        return ok
 
 def callar():
+    """Calla la voz y pide cerrar la conversación de voz abierta (⌃⌥. corre en otro proceso)."""
+    try:
+        (CASA / "cerrar_conversacion").touch()
+    except OSError:
+        pass
     subprocess.run(["pkill", "-x", "say"])
     subprocess.run(["pkill", "-x", "afplay"])
 

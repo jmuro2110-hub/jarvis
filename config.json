@@ -9,5 +9,9 @@
   "minutos_juego_aviso": [60, 120, 180],
   "rutina_url": "https://jmuro2110-hub.github.io/rutina/",
   "facial_url": "",
-  "modos": {}
+  "modos": {},
+  "conversacion_continua": true,
+  "timeout_seguimiento_seg": 15,
+  "max_turnos": 5,
+  "duracion_maxima_seg": 180
 }

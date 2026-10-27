@@ -29,6 +29,13 @@ RUTAS = ("rapido", "claude", "codex", "ninguno")
 ORIGENES = ("voz", "texto", "auto")
 SESIONES = ("nueva", "reanudada")
 
+# Conversación continua (upgrade 04): eventos aparte, para no inflar metricas_latencia.jsonl.
+CONV_ARCHIVO = pathlib.Path(os.environ.get("JARVIS_CONVERSACIONES")
+                            or pathlib.Path.home() / ".jarvis" / "conversaciones.jsonl")
+CONV_EVENTOS = ("activada", "seguimiento_abre", "seguimiento_detectado", "seguimiento_descartado", "cierre")
+CONV_MOTIVOS = ("timeout", "manual", "turnos", "tiempo", "callar", "transcripcion", "resumen", "dormir",
+                "error", "sin_orden", "desactivada", "otra_voz", "fantasma", "solo_jarvis")
+
 _actual = {}        # petición en curso: id, origen, t_fin (ns), ruta, total_hecho, sesion
 _voz_t0 = None      # cuándo empezó decir() (ns)
 
@@ -184,6 +191,42 @@ def desglose_claude(sub_ms, duration_ms, duration_api_ms, reanudada=False):
             registrar("claude_api", duration_api_ms)
     except Exception:
         pass
+
+
+def conversacion(evento, conv_id, turno=0, ms=None, motivo=None):
+    """Un evento por transición. Solo campos fijos y listas cerradas: nunca lo que dijo JP."""
+    try:
+        if evento not in CONV_EVENTOS or not conv_id:
+            return
+        fila = {"fecha": datetime.datetime.now().isoformat(timespec="milliseconds"),
+                "conv": str(conv_id)[:16], "evento": evento, "turno": int(turno)}
+        if motivo is not None:
+            fila["motivo"] = motivo if motivo in CONV_MOTIVOS else "error"
+        if isinstance(ms, (int, float)) and ms >= 0:
+            fila["ms"] = round(float(ms), 1)
+        CONV_ARCHIVO.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONV_ARCHIVO, "a") as f:
+            f.write(json.dumps(fila) + "\n")
+    except Exception:
+        pass
+
+
+def leer_conversaciones(dias=None):
+    filas = []
+    try:
+        limite = datetime.datetime.now() - datetime.timedelta(days=dias) if dias else None
+        for linea in CONV_ARCHIVO.read_text().splitlines():
+            try:
+                f = json.loads(linea)
+                if limite and datetime.datetime.fromisoformat(f["fecha"]) < limite:
+                    continue
+                if f["evento"] in CONV_EVENTOS:
+                    filas.append(f)
+            except Exception:
+                continue
+    except OSError:
+        pass
+    return filas
 
 
 # ---------- lectura para `jv latencia` ----------
