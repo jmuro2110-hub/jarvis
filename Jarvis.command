@@ -6,7 +6,11 @@ cd "$HOME/Documents/Jarvis" || exit 1
 printf '\033]0;J.A.R.V.I.S.\007'
 mkdir -p "$HOME/.jarvis"
 
-# Si ya había un Jarvis corriendo, lo apaga (nunca dos escuchando a la vez)
+# Si ya había un Jarvis corriendo, lo apaga (nunca dos escuchando a la vez).
+# Primero sus bucles de arranque/agenda: si no, lo vuelven a levantar a los 5 s (upgrade 04).
+for p in $(pgrep -f "Jarvis.command"); do
+  [ "$p" != "$$" ] && kill "$p" 2>/dev/null
+done
 pkill -f "jarvis_voz.py" 2>/dev/null
 pkill -f "bin/agenda.py" 2>/dev/null
 sleep 1
