@@ -25,15 +25,39 @@ ASISTENTE_CLAUDE = ["--restricted", "--strict-mcp-config",
                     "--tools", "Bash,Read,Edit,Write,Glob,Grep,WebSearch,WebFetch",
                     "--permission-mode", "dontAsk",
                     "--settings", str(JARVIS / "seguridad" / "claude_asistente.json")]
-# Codex de respaldo: solo conversa. Sandbox de solo lectura (sin escribir, sin red, sin AppleScript)
-# y sin plugins/MCP de computer-use o navegador, que actuarían fuera del sandbox.
-ASISTENTE_CODEX = ["--sandbox", "read-only", "-c", 'approval_policy="never"',
-                   "--disable", "plugins", "--disable", "apps", "--disable", "computer_use",
-                   "--disable", "browser_use", "--disable", "browser_use_external",
-                   "-c", "mcp_servers.node_repl.enabled=false"]
+# Codex de respaldo (upgrade 03): solo conversa, con dos capas.
+# 1) Sin herramientas: ni comandos, ni imágenes, ni plugins/apps/navegador/computer-use/subagentes, y sin
+#    cargar la config ni las reglas de JP (--ignore-user-config: nada de MCP ni perfiles de desarrollo).
+# 2) Perfil de permisos "jarvis_asistente" (Seatbelt): lee solo lo mínimo del sistema, el proyecto y el
+#    binario de Codex; ~/.jarvis/ DENEGADO; nada escribible; red apagada. OJO: --sandbox anula los perfiles
+#    (no se suman), por eso ya no se usa --sandbox read-only.
+CODEX_VERIFICADO = "0.164.0"     # versión donde se probó el aislamiento real (T11–T16); otra = sin respaldo
+PERFIL_CODEX = "jarvis_asistente"
+_FS_CODEX = ('{":minimal"="read", ":workspace_roots"={"."="read"}, "~/.local/bin"="read", '
+             '"~/.codex/packages"="read", "~/.jarvis"="deny"}')
+PERMISOS_CODEX = ["-c", f'default_permissions="{PERFIL_CODEX}"',
+                  "-c", f"permissions.{PERFIL_CODEX}.filesystem={_FS_CODEX}",
+                  "-c", f"permissions.{PERFIL_CODEX}.network.enabled=false"]
+ASISTENTE_CODEX = ["--ignore-user-config", "--ignore-rules", "--ephemeral",
+                   "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
+                   "-c", 'shell_environment_policy.inherit="core"', "-c", "agents.enabled=false",
+                   *[x for f in ("shell_tool", "unified_exec", "view_image", "multi_agent", "plugins", "apps",
+                                 "computer_use", "browser_use", "browser_use_external", "in_app_browser",
+                                 "image_generation", "hooks", "skill_search", "tool_suggest", "sleep_tool",
+                                 "code_mode_host")
+                     for x in ("--disable", f)],
+                   *PERMISOS_CODEX]
+CANARIO = CASA / "canario_upgrade03.txt"     # contenido inventado: si Codex lo lee, el aislamiento falló
+SIN_RESPALDO = "respaldo deshabilitado por seguridad"
+_SECRETO_RE = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION|^ANTHROPIC|^OPENAI|"
+                         r"^GROQ|^ELEVEN|^NTFY|^GH_|^GITHUB|^AWS|^GOOGLE", re.I)
 
 def entorno_asistente():
     return {**os.environ, "JARVIS_MODO": "asistente"}
+
+def entorno_codex():
+    """Sin llaves ni tokens de nadie (Codex usa su sesión de ChatGPT en ~/.codex, no variables)."""
+    return {k: v for k, v in entorno_asistente().items() if not _SECRETO_RE.search(k)}
 NO_EXISTE_RE = re.compile(r"no conversation found", re.I)   # --resume de un ID que Claude ya no tiene
 
 def _historial(n=6, origen=None):
@@ -129,10 +153,42 @@ def buscar_codex():
             return c
     return None
 
+_AISLADO = {}
+def codex_aislado(exe):
+    """Antes de usar Codex: versión verificada y prueba en Seatbelt de que el canario NO se lee y un
+    archivo del proyecto SÍ. Se repite una vez por proceso. Si algo no cuadra, no hay respaldo."""
+    if exe in _AISLADO:
+        return _AISLADO[exe]
+    ok = False
+    try:
+        v = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15,
+                           stdin=subprocess.DEVNULL).stdout.split()
+        if v and v[-1] == CODEX_VERIFICADO:
+            if not CANARIO.exists():
+                fd = os.open(CANARIO, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write("CANARIO-UPGRADE03 contenido inventado: zafiro-7319-murcielago-QX\n")
+            base = [exe, "sandbox", *PERMISOS_CODEX, "-P", PERFIL_CODEX, "--"]
+            no = subprocess.run(base + ["/bin/cat", str(CANARIO)], cwd=JARVIS, capture_output=True,
+                                text=True, timeout=30, stdin=subprocess.DEVNULL, env=entorno_codex())
+            si = subprocess.run(base + ["/bin/cat", str(JARVIS / "config.json")], cwd=JARVIS,
+                                capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+                                env=entorno_codex())
+            ok = (no.returncode != 0 and "zafiro" not in no.stdout + no.stderr
+                  and "operation not permitted" in no.stderr.lower() and si.returncode == 0)
+    except Exception:
+        ok = False
+    if not ok:
+        log("Codex sin aislamiento verificable: respaldo deshabilitado por seguridad")
+    _AISLADO[exe] = ok
+    return ok
+
 def codex(texto, voz, origen="personal"):
     exe = buscar_codex()
     if not exe:
         return None, "Codex no instalado"
+    if not codex_aislado(exe):
+        return None, SIN_RESPALDO
     # Contexto de respaldo: solo pláticas personales, y solo para consultas personales.
     previas = _historial(4, "personal") if origen == "personal" else []
     contexto = "\n".join(f"JP: {h['tu']}\nJarvis: {h['jarvis'][:400]}" for h in previas)
@@ -144,7 +200,7 @@ def codex(texto, voz, origen="personal"):
         try:
             r = subprocess.run([exe, "exec", "--skip-git-repo-check", *ASISTENTE_CODEX,
                                 "-o", salida_f, prompt], cwd=JARVIS, capture_output=True, text=True,
-                               timeout=300, stdin=subprocess.DEVNULL, env=entorno_asistente())
+                               timeout=300, stdin=subprocess.DEVNULL, env=entorno_codex())
             salida = pathlib.Path(salida_f).read_text().strip() or (r.stdout or "").strip()
         except subprocess.TimeoutExpired:
             e.estado = "timeout"
@@ -172,8 +228,12 @@ def pensar(texto, voz=False, origen="personal"):
         tm.ruta("codex")
         if resp is None:
             log(f"ChatGPT tampoco ({err2})")
-            resp = ("Señor, mis dos cerebros están fuera de servicio por el momento. "
-                    "Los comandos rápidos siguen funcionando.")
+            if err2 == SIN_RESPALDO:
+                resp = ("Señor, Claude no está disponible y el respaldo con ChatGPT está deshabilitado "
+                        "por seguridad. Los comandos rápidos siguen funcionando.")
+            else:
+                resp = ("Señor, mis dos cerebros están fuera de servicio por el momento. "
+                        "Los comandos rápidos siguen funcionando.")
             cerebro = "ninguno"
             tm.ruta("ninguno")
     _guardar(texto, resp, cerebro, origen)

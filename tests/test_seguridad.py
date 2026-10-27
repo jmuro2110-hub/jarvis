@@ -285,6 +285,7 @@ class G_Cerebros(Base):
         llamadas = []
         with mock.patch.object(pensar_mod, "subprocess", self.run_falso(llamadas, claude_ok)), \
              mock.patch.object(pensar_mod, "buscar_codex", return_value="/falso/codex"), \
+             mock.patch.object(pensar_mod, "codex_aislado", return_value=True), \
              tempfile.TemporaryDirectory() as d, mock.patch.object(sesiones, "DIR", pathlib.Path(d)), \
              mock.patch.object(pensar_mod, "estado"), mock.patch.object(pensar_mod, "log"), \
              mock.patch.object(pensar_mod, "_guardar"):
@@ -307,13 +308,15 @@ class G_Cerebros(Base):
         llamadas = self.pensar(claude_ok=False)
         self.assertEqual([c[0][0] for c in llamadas], ["claude", "/falso/codex"])
         cmd, kw = llamadas[1]
-        self.assertEqual(cmd[cmd.index("--sandbox") + 1], "read-only")
+        self.assertNotIn("--sandbox", cmd)              # upgrade 03: --sandbox anularía el perfil
+        self.assertIn('default_permissions="jarvis_asistente"', cmd)
+        self.assertIn("permissions.jarvis_asistente.network.enabled=false", cmd)
         self.assertNotIn("workspace-write", cmd)
         self.assertNotIn("danger-full-access", cmd)
         self.assertFalse(any("dangerously" in c or "approve-for-me" in c or "--add-dir" == c for c in cmd))
         for f in ("plugins", "computer_use", "browser_use", "apps"):
             self.assertIn(f, [cmd[i + 1] for i, c in enumerate(cmd) if c == "--disable"])
-        self.assertIn("mcp_servers.node_repl.enabled=false", cmd)
+        self.assertIn("--ignore-user-config", cmd)       # upgrade 03: sin MCP de la config de JP
         self.assertEqual(kw["env"]["JARVIS_MODO"], "asistente")
 
 

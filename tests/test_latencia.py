@@ -46,6 +46,7 @@ class Base(unittest.TestCase):
             mock.patch.object(pensar_mod, "estado"), mock.patch.object(pensar_mod, "log"),
             mock.patch.object(pensar_mod, "_guardar"),
             mock.patch.object(sesiones, "DIR", pathlib.Path(self.dir.name)),   # nunca ~/.jarvis real
+            mock.patch.object(pensar_mod, "codex_aislado", return_value=True),  # Codex falso "verificado"
             mock.patch.object(voz, "estado"), mock.patch.object(voz, "log"),
             mock.patch.object(decir_mod, "estado"),
             mock.patch.object(decir_mod, "secretos", return_value={}),

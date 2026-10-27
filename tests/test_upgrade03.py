@@ -39,7 +39,8 @@ class Base(unittest.TestCase):
         self.parches = [mock.patch.object(tm, "ARCHIVO", self.archivo),
                         mock.patch.object(pensar_mod, "estado"), mock.patch.object(pensar_mod, "log"),
                         mock.patch.object(pensar_mod, "_guardar"),
-                        mock.patch.object(sesiones, "DIR", d)]
+                        mock.patch.object(sesiones, "DIR", d),
+                        mock.patch.object(pensar_mod, "codex_aislado", return_value=True)]
         for p in self.parches:
             p.start()
         tm.terminar()
@@ -389,6 +390,167 @@ class T10_Guardia(Sesiones):
                  ("enviar_whatsapp", ""): "confirmar", ("gasto", ""): "confirmar", ("algo_raro", ""): "bloqueado"}
         for (tipo, red), esperado in casos.items():
             self.assertEqual(politica.evaluar({"tipo": tipo, "red": red})[0], esperado, tipo)
+
+
+# ---------------------------------------------------------------- Parte C: aislamiento de Codex
+CODEX_REAL = pensar_mod.buscar_codex()
+
+
+def _version_real():
+    try:
+        return subprocess.run([CODEX_REAL, "--version"], capture_output=True, text=True, timeout=15).stdout.split()[-1]
+    except Exception:
+        return None
+
+
+@unittest.skipUnless(CODEX_REAL and _version_real() == pensar_mod.CODEX_VERIFICADO and pensar_mod.CANARIO.exists(),
+                     "sin Codex verificado o sin canario")
+class CodexReal(unittest.TestCase):
+    """Corre comandos reales dentro del Seatbelt del perfil de producción (sin llamar al modelo).
+    Nunca imprime el canario: solo revisa si su marca aparece."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.d = pathlib.Path(cls.tmp.name).resolve()
+        (cls.d / "permitido.txt").write_text("archivo autorizado: hola-inocuo-42\n")
+        (cls.d / "enlace").symlink_to(pensar_mod.CANARIO)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def sandbox(self, *cmd, extra_lectura=True):
+        permisos = list(pensar_mod.PERMISOS_CODEX)
+        if extra_lectura:                                    # el directorio de prueba, solo lectura
+            i = next(i for i, x in enumerate(permisos) if ".filesystem=" in x)
+            permisos[i] = permisos[i][:-1] + f', "{self.d}"="read"}}'
+        return subprocess.run([CODEX_REAL, "sandbox", *permisos, "-P", pensar_mod.PERFIL_CODEX, "--", *cmd],
+                              cwd=RAIZ, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL,
+                              env=pensar_mod.entorno_codex())
+
+    def assertNegado(self, r):
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("zafiro", r.stdout + r.stderr)
+        self.assertIn("operation not permitted", r.stderr.lower())     # lo niega el SO, no el modelo
+
+    def test_T11_lee_lo_autorizado(self):
+        r = self.sandbox("/bin/cat", str(self.d / "permitido.txt"))
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "archivo autorizado: hola-inocuo-42"))
+        self.assertEqual(self.sandbox("/bin/cat", "config.json", extra_lectura=False).returncode, 0)
+        self.assertTrue(pensar_mod.codex_aislado(CODEX_REAL))
+
+    def test_T12_no_lee_el_canario(self):
+        self.assertNegado(self.sandbox("/bin/cat", str(pensar_mod.CANARIO)))
+        self.assertNegado(self.sandbox("/bin/ls", str(pensar_mod.CASA)))
+        self.assertNegado(self.sandbox("/bin/cp", str(pensar_mod.CANARIO), str(self.d / "copia")))
+
+    def test_T13_rutas_alternativas(self):
+        self.assertNegado(self.sandbox("/bin/sh", "-c", "cd ~ && /bin/cat .jarvis/canario_upgrade03.txt"))
+        self.assertNegado(self.sandbox("/bin/cat", f"{self.d}/../../../../../../..{pensar_mod.CANARIO}"))
+        self.assertNegado(self.sandbox("/bin/cat", str(self.d / "enlace")))
+        r = self.sandbox("/bin/sh", "-c", "/bin/cat ~/.jarvis/*")       # ni siquiera puede listar: * no se expande
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("zafiro", r.stdout + r.stderr)
+
+    def test_T14_no_escribe(self):
+        destino = RAIZ / ".codex_prueba_escritura"
+        try:
+            self.assertNotEqual(self.sandbox("/usr/bin/touch", str(destino)).returncode, 0)
+            self.assertNotEqual(self.sandbox("/usr/bin/touch", str(self.d / "x")).returncode, 0)
+            self.assertFalse(destino.exists())
+            self.assertFalse((self.d / "x").exists())
+        finally:
+            if destino.exists():
+                destino.unlink()
+
+    def test_T15_sin_red(self):
+        r = self.sandbox("/usr/bin/curl", "-sS", "-m", "5", "-o", "/dev/null", "https://example.com")
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_capa1_sin_herramientas_de_archivos(self):
+        """Lo que ve el modelo (codex debug prompt-input, local): sin comandos, imágenes ni subagentes."""
+        flags = [f for f in pensar_mod.ASISTENTE_CODEX if f not in ("--ignore-user-config", "--ignore-rules", "--ephemeral")]
+        r = subprocess.run([CODEX_REAL, "debug", "prompt-input", *flags, "hola"], cwd=RAIZ, capture_output=True,
+                           text=True, timeout=60, stdin=subprocess.DEVNULL, env=pensar_mod.entorno_codex())
+        herramientas = json.dumps([x for x in json.loads(r.stdout) if x.get("type") == "additional_tools"])
+        for prohibida in ("declare const tools: { exec_command", "declare const tools: { view_image",
+                          "declare const tools: { write_stdin", '"name": "spawn_agent"', "mcp__cua_repl"):
+            self.assertNotIn(prohibida, herramientas)
+
+
+class T16_FallbackInseguro(Base):
+    def run_codex(self, version="codex-cli 0.164.0", canario_sale=False, negado=True):
+        llamadas = []
+        def run(cmd, **kw):
+            llamadas.append(cmd)
+            if cmd[1] == "--version":
+                return subprocess.CompletedProcess(cmd, 0, version, "")
+            if cmd[1] == "sandbox":
+                if str(pensar_mod.CANARIO) in cmd:
+                    if canario_sale:
+                        return subprocess.CompletedProcess(cmd, 0, "zafiro", "")
+                    return subprocess.CompletedProcess(cmd, 1, "", "cat: x: Operation not permitted" if negado else "")
+                return subprocess.CompletedProcess(cmd, 0, "{}", "")
+            raise AssertionError("no debe ejecutar codex exec")
+        return run, llamadas
+
+    def aislado(self, **kw):
+        run, llamadas = self.run_codex(**kw)
+        self.parches[-1].stop()                              # aquí sí se prueba la verificación real
+        try:
+            with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)), \
+                 mock.patch.object(pensar_mod, "_AISLADO", {}), \
+                 mock.patch.object(pensar_mod, "CANARIO", pathlib.Path(self.dir.name) / "canario.txt"):
+                return pensar_mod.codex_aislado("/falso/codex"), llamadas
+        finally:
+            self.parches[-1].start()
+
+    def test_version_distinta_desactiva(self):
+        self.assertFalse(self.aislado(version="codex-cli 0.165.0")[0])
+
+    def test_canario_legible_desactiva(self):
+        self.assertFalse(self.aislado(canario_sale=True)[0])
+
+    def test_falla_sin_negacion_del_so_desactiva(self):
+        self.assertFalse(self.aislado(negado=False)[0])
+
+    def test_todo_bien_activa(self):
+        ok, _ = self.aislado()
+        self.assertTrue(ok)
+
+    def test_mensaje_claro_y_no_ejecuta(self):
+        llamadas = []
+        def run(cmd, **kw):
+            llamadas.append(cmd)
+            return subprocess.CompletedProcess(cmd, 1, claude_json("hit your limit", is_error=True), "")
+        with mock.patch.object(pensar_mod, "subprocess", falso_subprocess(run)), \
+             mock.patch.object(pensar_mod, "buscar_codex", return_value="/falso/codex"), \
+             mock.patch.object(pensar_mod, "codex_aislado", return_value=False):
+            resp, cerebro = pensar_mod.pensar("hola")
+        self.assertEqual(cerebro, "ninguno")
+        self.assertIn("deshabilitado por seguridad", resp)
+        self.assertEqual([c[0] for c in llamadas], ["claude"])           # Codex nunca corrió
+
+    def test_entorno_sin_llaves(self):
+        with mock.patch.dict(os.environ, {"GROQ_API_KEY": "x", "ANTHROPIC_API_KEY": "x", "OPENAI_API_KEY": "x",
+                                          "ELEVENLABS_KEY": "x", "GITHUB_TOKEN": "x", "MI_SECRET": "x"}):
+            env = pensar_mod.entorno_codex()
+        for k in ("GROQ_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_KEY", "GITHUB_TOKEN", "MI_SECRET"):
+            self.assertNotIn(k, env)
+        for k in ("PATH", "HOME"):
+            self.assertIn(k, env)
+        self.assertEqual(env["JARVIS_MODO"], "asistente")
+
+    def test_codex_exec_usa_perfil_y_no_sandbox(self):
+        cmd = pensar_mod.ASISTENTE_CODEX
+        self.assertNotIn("--sandbox", cmd)
+        self.assertIn("--ignore-user-config", cmd)
+        self.assertIn('approval_policy="never"', cmd)
+        self.assertIn('"~/.jarvis"="deny"', " ".join(cmd))
+        self.assertNotIn('"write"', " ".join(cmd))
+        self.assertFalse(any("dangerously" in c or "approve-for-me" in c or c == "--add-dir" for c in cmd))
+        for f in ("shell_tool", "unified_exec", "view_image", "computer_use", "browser_use", "plugins", "apps"):
+            self.assertIn(f, [cmd[i + 1] for i, c in enumerate(cmd) if c == "--disable"])
 
 
 if __name__ == "__main__":
