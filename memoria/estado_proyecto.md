@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-28 (upgrade 07 terminado; eco de Groq; 2 pendientes nuevos)
+**Última actualización:** 2026-10-28 (activación en IDLE arreglada; upgrade 08 etapa 0)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -49,7 +49,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - [ ] iPhone: app ntfy suscrita al canal.
 - [ ] Datos de JP: link app análisis facial, app de modos teclado/mouse (Logitech G HUB), ciudad para clima.
 - [ ] Subir Jarvis a GitHub privado (jmuro2110-hub/jarvis) para que ChatGPT lea el código real.
-- [ ] Bug (2026-10-28): con la app de Claude enfrente, «Jarvis» desde IDLE no activa; en seguimiento sí escucha. En diagnóstico.
+- [x] Bug (2026-10-28): «Jarvis» desde IDLE no activaba (en seguimiento sí). No era la app de Claude: con ruido de fondo Whisper base tardaba hasta 24 s y `oido.vaciar()` tiraba lo dicho mientras tanto. Arreglado en 4c0f1d7 (cola conservada, base ve 3 s, telemetría `deteccion_base`, «qué horas»). Prueba física 2026-10-28 14:00–14:02 con la app de Claude al frente: 3/3 activaciones desde IDLE (base 576 / 504 / 602 ms), la tercera con Spotify sonando; «cállate» confirmado (paró en 2.15 s). Abierto: con música, base a veces tarda 2–9.6 s aun con 3 s de audio (probable reintento por temperatura de faster-whisper); ya no se pierde la orden pero llega tarde. Una orden salió mal transcrita («Corazón»).
 - [ ] Correr Jarvis en segundo plano sin ventana de Terminal, sin perder el permiso del micrófono.
 
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
@@ -59,9 +59,10 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 4. **Iniciativa con criterio**: prioridades, silencio, no repetir avisos, contexto (modo, pendientes).
 5. **Autonomía real en macOS** con candados por código (no solo instrucciones).
 6. Después: voz premium (ElevenLabs), recordatorios con hora, Classroom.
+- Idea reservada (después del 08, no implementada): memoria sugerida con confirmación. Jarvis detecta una posible preferencia y pregunta «¿Quiere que recuerde que…?»; solo un «sí» explícito de JP ligado a esa propuesta la guarda por el mecanismo local del 07. «No», silencio, vencimiento o ambigüedad no guardan nada. Misma validación de privacidad y ámbitos; nunca confirmaciones del modelo, páginas o herramientas.
 
 ## Paso actual
-- Upgrade 07 terminado (2026-10-28): memoria permanente con 353 pruebas OK. Prueba física aprobada: guardar por voz y ⌃⌥Espacio, uso en Claude, 40 desde la memoria con sesión nueva, corregir a 50 por voz (local, 1.9 s), «¿cuánto deberían durar mis bloques?» → 50, consultar, olvidar y «cállate» a media respuesta (paró en 2.5 s). Arreglos durante la prueba: llamado mal transcrito («Jardis»), red de seguridad de la bitácora, intenciones sin acentos ni mayúsculas. Recuerdos activos: bloques de 50 minutos (escuela) y avanzar una mejora a la vez (desarrollo). Después del 07, aparte: eco del prompt de Groq descartado ✅ (bb5416e): 3+ palabras todas de VOCAB («Pendientes, tarea, rutina, panel.») → «No le entendí, señor.», sin Claude. 357 pruebas OK.
+- Upgrade 07 terminado (2026-10-28): memoria permanente con 353 pruebas OK. Prueba física aprobada: guardar por voz y ⌃⌥Espacio, uso en Claude, 40 desde la memoria con sesión nueva, corregir a 50 por voz (local, 1.9 s), «¿cuánto deberían durar mis bloques?» → 50, consultar, olvidar y «cállate» a media respuesta (paró en 2.5 s). Arreglos durante la prueba: llamado mal transcrito («Jardis»), red de seguridad de la bitácora, intenciones sin acentos ni mayúsculas. Recuerdos activos: bloques de 50 minutos (escuela) y avanzar una mejora a la vez (desarrollo). Después del 07, aparte: eco del prompt de Groq descartado ✅ (bb5416e): 3+ palabras todas de VOCAB («Pendientes, tarea, rutina, panel.») → «No le entendí, señor.», sin Claude. 357 pruebas OK. Activación en IDLE arreglada (4c0f1d7, 367 pruebas OK, prueba física aprobada).
 - Upgrade 06 terminado (2026-10-27): barge-in («cállate» ≈1.6 s, «espera» ≈2.2 s), cero falsas interrupciones con música, voz al result 0.39–0.52 s antes, pendientes solo personales.
 - Límites abiertos (07): búsqueda léxica, sin semántica; dos recuerdos que se contradicen se pasan juntos; la validación de privacidad es por palabras (conservadora); reiniciar Jarvis no borra la sesión reciente (30 min).
 - Límites abiertos (06 y antes): barge-in sin cancelación de eco y con piso de ruido propio: con música alta casi no hay candidatos; callarlo tarda ~1.5–2.2 s; «no, mejor X» con la voz sonando solo está probado en automático; la primera detección con Whisper base tras reiniciar tardó 6.2 s; la voz anticipada solo aplica a conocimiento general; sesiones del asistente y de desarrollo comparten carpeta de proyecto de Claude; WebFetch puede sacar datos en una URL; en Codex quedan `apply_patch`/recursos MCP dentro del modo código (falla cerrado); si se actualiza Codex el respaldo se apaga hasta volver a probar.
