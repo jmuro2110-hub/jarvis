@@ -620,6 +620,9 @@ class Audio:
     def __init__(self, texto):
         self.texto = texto
 
+    def __getitem__(self, _):                      # IDLE recorta a DETECCION_SEG: el texto es el mismo
+        return self
+
 
 class OidoCola:
     """Oído con COLA real: lo que JP dijo después de «Jarvis» está en la cola; vaciar() lo tira."""

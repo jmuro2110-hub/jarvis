@@ -34,6 +34,9 @@ class Audio:
     def __init__(self, texto, otra_voz=False):
         self.texto, self.otra_voz = texto, otra_voz
 
+    def __getitem__(self, _):                      # IDLE recorta a DETECCION_SEG: el texto es el mismo
+        return self
+
 
 class OidoFalso:
     """Guion de frases. ("di", texto, seg) habla tras `seg` segundos; ("calla", seg) nadie habla;

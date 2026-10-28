@@ -148,7 +148,7 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
     pend = pendientes_rapido(t)
     if pend is not None:
         return pend, "pendientes"
-    if re.fullmatch(r"(qué hora es|la hora|dime la hora)", t):
+    if re.fullmatch(r"(qu[eé] hora es|qu[eé] horas son|qu[eé] horas|la hora|dime la hora)", t):
         n = datetime.datetime.now(); return f"Son las {n.hour}:{n.minute:02d}, señor.", "hora"
     m = re.search(r"\bmodo (\w+)", t)
     if m and re.search(r"\b(desactiva|quita|apaga|sal del|termina|cancela|ya no)\b", t):
@@ -182,7 +182,7 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
 
 
 # ---------- oídos ----------
-from oido import Oido, transcribir, separar, transcribir_nube, es_fantasma, solo_vocabulario, VOCAB  # noqa: E402
+from oido import Oido, RATE, transcribir, separar, transcribir_nube, es_fantasma, solo_vocabulario, VOCAB  # noqa: E402
 
 IDIOMA = os.environ.get("JARVIS_IDIOMA", "es")
 
@@ -519,6 +519,8 @@ def conversar(oido, preciso, conv, orden=None, vaciar=True):
         estado("listo")
 
 
+DETECCION_SEG = 3.0        # IDLE: cuánto de la frase ve Whisper base para buscar «Jarvis» (la orden va completa a Groq)
+BASE_LENTA_MS = 2000       # más que esto: se registra deteccion_base (motivo lenta)
 SOLO_JARVIS_SEG = 1.5      # voz (sin silencios) hasta la cual un «Jarvis» sin orden se trata como solo «Jarvis»
 
 
@@ -532,19 +534,30 @@ def voz_seg(oido):
 
 
 def escuchar_una(oido, rapido, preciso, conv):
-    """IDLE: una frase. Solo «Jarvis» (Whisper base, local) o ⌃⌥J abren conversación; nada va a Groq antes."""
+    """IDLE: una frase. Solo «Jarvis» (Whisper base, local) o ⌃⌥J abren conversación; nada va a Groq antes.
+    Base solo ve los primeros DETECCION_SEG (con ruido alucinaba 15 s de texto y tardaba hasta 24 s) y lo que
+    JP dijo mientras transcribía se queda en la cola: solo se vacía después de una conversación."""
     audio = oido.frase(disparador=DISPARADOR)
+    hablo = False
     try:
         if isinstance(audio, str):                    # atajo de teclado
+            hablo = True
             conversar(oido, preciso, conv)
         else:
             t0 = tm.ahora()
-            borrador = transcribir(rapido, audio, IDIOMA)
+            borrador = transcribir(rapido, audio[:int(DETECCION_SEG * RATE)], IDIOMA)
             activado, orden_borrador = separar(borrador)
+            ms = (tm.ahora() - t0) / 1e6
+            if not activado or ms > BASE_LENTA_MS:
+                tm.nueva("voz")                       # solo tiempo y motivo: nunca el texto ni el audio
+                tm.registrar("deteccion_base", ms, estado="exito" if activado else "fallback",
+                             extra={"motivo": "lenta" if activado else "sin_jarvis"})
             if not activado:
+                tm.terminar()
                 return
+            hablo = True
             tm.nueva("voz")
-            tm.registrar("deteccion_jarvis", (tm.ahora() - t0) / 1e6)
+            tm.registrar("deteccion_jarvis", ms)
             medir_frase(oido)
             if not orden_borrador and voz_seg(oido) <= SOLO_JARVIS_SEG:
                 # Solo «Jarvis» (upgrade 05): no se manda a Groq (eso tardaba 1–3 s mientras JP ya hablaba)
@@ -562,7 +575,8 @@ def escuchar_una(oido, rapido, preciso, conv):
         log(f"voz error: {e}"); print(f"⚠️  {e}"); estado("listo")
     finally:
         tm.terminar()
-        oido.vaciar()
+        if hablo:                                     # la cola trae la voz de Jarvis: esa sí se tira
+            oido.vaciar()
 
 
 def main():

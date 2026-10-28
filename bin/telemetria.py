@@ -37,7 +37,9 @@ ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion
           # memoria_lectura: renglones inválidos o error al leer. Nunca el contenido de un recuerdo.
           "memoria_busqueda", "memoria_accion", "memoria_lectura",
           # después del 07: transcripción tirada antes de Claude (motivo = solo_vocabulario).
-          "transcripcion_descartada")
+          "transcripcion_descartada",
+          # IDLE: Whisper base tardó más de 2 s (motivo lenta) o no encontró «Jarvis» (motivo sin_jarvis).
+          "deteccion_base")
 # Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
 MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
                   "no_voz", "markdown", "distinto", "salida_tardia",
@@ -48,7 +50,7 @@ MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inespera
                   "guardado", "duplicado", "sensible", "ambiguo", "largo", "corregido", "desactivado", "consulta",
                   "sin_antecedente", "error_escritura", "error_lectura", "invalido",
                   # transcripción descartada
-                  "solo_vocabulario")
+                  "solo_vocabulario", "lenta")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")

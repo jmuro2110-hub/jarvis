@@ -4,6 +4,8 @@
 - Activación: decir "Jarvis, …" (detección con Whisper `base`, entiende español; voz/oido.py) o ⌃⌥J. Se puede dar la orden de un jalón: "Jarvis, abre Spotify".
 - Transcripción de la orden: Groq whisper-large-v3-turbo (gratis, GROQ_API_KEY en ~/.jarvis/secretos.env, se guarda con `jv llave groq`); si falla, faster-whisper local (`small`). La detección de "Jarvis" siempre es local (`base`).
 - Filtro de frases fantasma ("Suscríbete", "Gracias por ver"…) en voz/oido.py.
+- IDLE (arreglo 2026-10-28): Whisper base busca «Jarvis» solo en los primeros 3 s de la frase (`DETECCION_SEG`); la orden completa sigue yendo a Groq. Lo que JP dice mientras base transcribe se queda en la cola: solo se vacía después de una conversación (ahí la cola trae la voz de Jarvis). Telemetría `deteccion_base` (sin texto ni audio) cuando base tarda más de 2 s (motivo `lenta`) o no encuentra «Jarvis» (`sin_jarvis`). Causa: con ruido de fondo, base alucinaba hasta 15 s de texto, tardaba hasta 24 s y el `vaciar()` tiraba el «Jarvis» dicho mientras tanto.
+- Hora: «qué hora es», «qué horas (son)», «la hora», «dime la hora».
 - Eco del prompt de Groq: si la transcripción son 3+ palabras y todas salen de `VOCAB` (sin contar «jarvis»/«señor»), p. ej. «Pendientes, tarea, rutina, panel.», no va a Claude: Jarvis dice «No le entendí, señor.» (`solo_vocabulario()`, telemetría `transcripcion_descartada`). «Jarvis, abre Spotify» o «modo gamer» siguen funcionando.
 - Sensibilidad: JARVIS_SENSIBILIDAD (3.0; súbela si el ruido lo activa). Prueba: voz/prueba_mic.py.
 - Cerebro: `bin/pensar.py` → Claude con sesión personal explícita (upgrade 03: `--resume` del ID si fue hace <30 min) y, si topa límite o falla, ChatGPT con Codex aislado.
