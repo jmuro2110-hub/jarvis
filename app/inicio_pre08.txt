@@ -1,0 +1,2 @@
+# Elementos de inicio antes del 08 (2026-10-28 14:07:24)
+Jarvis.command, Hammerspoon, /Users/jpmuro/Documents/Jarvis/Jarvis.command, /Users/jpmuro/Applications/Hammerspoon.app, false, false

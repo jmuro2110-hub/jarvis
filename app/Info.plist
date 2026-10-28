@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>mx.jpmuro.jarvis</string>
+	<key>CFBundleName</key><string>Jarvis</string>
+	<key>CFBundleDisplayName</key><string>J.A.R.V.I.S.</string>
+	<key>CFBundleExecutable</key><string>Jarvis</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>LSMinimumSystemVersion</key><string>13.0</string>
+	<key>LSUIElement</key><true/>
+	<key>NSMicrophoneUsageDescription</key><string>Jarvis escucha «Jarvis, …» para atender sus órdenes de voz.</string>
+	<key>NSAppleEventsUsageDescription</key><string>Jarvis controla la música (Spotify) y cierra juegos al cambiar de modo.</string>
+	<key>NSDocumentsFolderUsageDescription</key><string>El proyecto de Jarvis (código, memoria y pendientes) vive en Documentos.</string>
+</dict>
+</plist>

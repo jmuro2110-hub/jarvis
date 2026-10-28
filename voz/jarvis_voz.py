@@ -599,6 +599,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--prueba-permisos" in sys.argv:              # upgrade 08, etapa 1: permisos desde el Python real de la voz
+        import prueba_permisos
+        sys.exit(prueba_permisos.main())
     try:
         main()
     except KeyboardInterrupt:
