@@ -111,6 +111,20 @@ def es_fantasma(texto):
 VOCAB = ("Jarvis, señor. Abre YouTube, Spotify, Classroom, Minecraft, Twitch, Gmail, TikTok, Instagram, "
          "WhatsApp, ChatGPT. Modo gamer, modo estudio. Pendientes, tarea, rutina, panel.")
 
+# Groq a veces "transcribe" el silencio repitiendo su propio prompt («Pendientes, tarea, rutina, panel.»).
+def _palabras(texto):
+    import unicodedata
+    plano = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+    return re.findall(r"[a-z0-9]+", plano)
+
+PALABRAS_VOCAB = frozenset(_palabras(VOCAB))
+
+def solo_vocabulario(texto):
+    """True si son 3+ palabras (sin contar «jarvis» ni «señor») y TODAS salen de VOCAB: eco del prompt.
+    «Jarvis, modo gamer» o «abre Spotify» (2 palabras) siguen siendo órdenes."""
+    p = [w for w in _palabras(texto) if w not in ("jarvis", "senor")]
+    return len(p) >= 3 and all(w in PALABRAS_VOCAB for w in p)
+
 def _wav(audio):
     import io, wave
     pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()

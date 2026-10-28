@@ -35,7 +35,9 @@ ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion
           # upgrade 07 (memoria). memoria_busqueda: búsqueda para el prompt de Claude (candidatos, seleccionados,
           # usada). memoria_accion: guardar/corregir/olvidar/consultar local (motivo = resultado).
           # memoria_lectura: renglones inválidos o error al leer. Nunca el contenido de un recuerdo.
-          "memoria_busqueda", "memoria_accion", "memoria_lectura")
+          "memoria_busqueda", "memoria_accion", "memoria_lectura",
+          # después del 07: transcripción tirada antes de Claude (motivo = solo_vocabulario).
+          "transcripcion_descartada")
 # Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
 MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
                   "no_voz", "markdown", "distinto", "salida_tardia",
@@ -44,7 +46,9 @@ MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inespera
                   "callar", "espera", "solo_jarvis", "orden",
                   # memoria (upgrade 07)
                   "guardado", "duplicado", "sensible", "ambiguo", "largo", "corregido", "desactivado", "consulta",
-                  "sin_antecedente", "error_escritura", "error_lectura", "invalido")
+                  "sin_antecedente", "error_escritura", "error_lectura", "invalido",
+                  # transcripción descartada
+                  "solo_vocabulario")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")

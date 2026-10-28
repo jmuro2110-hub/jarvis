@@ -117,6 +117,8 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
     c = config()
     if re.fullmatch(r"(cállate|silencio|basta)" if seguimiento else r"(cállate|silencio|ya|basta|para)", t):
         callar(); return "", "callar"
+    if solo_vocabulario(original):                    # eco del prompt de Groq: nunca a Claude
+        return "No le entendí, señor.", "no_entendi"
     # Upgrade 07: memoria explícita, local, sin Claude. Antes de Spotify/volumen: «recuerda que… pausa…» se guarda
     # (solo casa si la frase EMPIEZA con «recuerda que…»/«corrige…»/«olvida…»/«¿qué recuerdas…?»).
     mem = memoria.atender(original, "voz", ref)
@@ -180,7 +182,7 @@ def clasificar_rapido(t, seguimiento=False, previo=None, ref=None):
 
 
 # ---------- oídos ----------
-from oido import Oido, transcribir, separar, transcribir_nube, es_fantasma, VOCAB          # noqa: E402
+from oido import Oido, transcribir, separar, transcribir_nube, es_fantasma, solo_vocabulario, VOCAB  # noqa: E402
 
 IDIOMA = os.environ.get("JARVIS_IDIOMA", "es")
 
@@ -237,6 +239,8 @@ def procesar(texto, conv=None, seguimiento=False):
                 conv.ultimo_recuerdo = memoria.ultimo
         print(f"🤖 Jarvis: {rapida or '(hecho)'}")
         log("rápido: memoria" if categoria == "memoria" else f"rápido: {texto} → {rapida}")
+        if categoria == "no_entendi":
+            tm.registrar("transcripcion_descartada", 0, extra={"motivo": "solo_vocabulario"})
         if rapida and not cerrar_pedido():
             _hablar(rapida, conv)
         else:
