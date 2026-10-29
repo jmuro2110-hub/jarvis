@@ -51,6 +51,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - [ ] Subir Jarvis a GitHub privado (jmuro2110-hub/jarvis) para que ChatGPT lea el código real.
 - [x] Bug (2026-10-28): «Jarvis» desde IDLE no activaba (en seguimiento sí). No era la app de Claude: con ruido de fondo Whisper base tardaba hasta 24 s y `oido.vaciar()` tiraba lo dicho mientras tanto. Arreglado en 4c0f1d7 (cola conservada, base ve 3 s, telemetría `deteccion_base`, «qué horas»). Prueba física 2026-10-28 14:00–14:02 con la app de Claude al frente: 3/3 activaciones desde IDLE (base 576 / 504 / 602 ms), la tercera con Spotify sonando; «cállate» confirmado (paró en 2.15 s). Abierto: con música, base a veces tarda 2–9.6 s aun con 3 s de audio (probable reintento por temperatura de faster-whisper); ya no se pierde la orden pero llega tarde. Una orden salió mal transcrita («Corazón»).
 - [ ] Correr Jarvis en segundo plano sin ventana de Terminal, sin perder el permiso del micrófono.
+- [ ] Whisper base lento en IDLE con música: 2–9.6 s aun con solo 3 s de audio (`deteccion_base` motivo `lenta`). Causa probable: reintentos por temperatura de faster-whisper (fallback 0.2, 0.4…) cuando el audio es dudoso. La orden ya no se pierde (4c0f1d7), solo llega tarde. No se arregla en el 08; candidato: `temperature=0` solo para la detección de «Jarvis», medido antes/después.
 
 ## Roadmap de upgrade (diagnóstico de ChatGPT, 2026-10-24, aprobado)
 1. **Conversación continua**: seguir la plática sin repetir "Jarvis" y entender "esa/la primera" ✅ (upgrade 04). Barge-in ✅ (upgrade 06).

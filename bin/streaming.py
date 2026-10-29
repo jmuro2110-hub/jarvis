@@ -238,9 +238,22 @@ def coincide(hablado, final):
 def lanzar_decir(texto):
     """bin/decir.py como hijo: voz.lock, Juan, limpiar_para_voz, callar por pkill. Hereda JARVIS_REQ_ID.
     En su PROPIO grupo de procesos (upgrade 06): cancelar mata a decir.py y a su `say`/`afplay`, y a nadie más."""
-    return subprocess.Popen([sys.executable, str(BIN / "decir.py"), texto], stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ),
-                            start_new_session=True)
+    p = subprocess.Popen([sys.executable, str(BIN / "decir.py"), texto], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ),
+                         start_new_session=True)
+    VOCES.difference_update([v for v in VOCES if v.poll() is not None])
+    VOCES.add(p)
+    return p
+
+
+VOCES = set()      # upgrade 08: voces de streaming vivas (su propia sesión), para apagar sin dejar huérfanas
+
+
+def limpiar_voces():
+    """Al apagar la voz (SIGTERM del supervisor): calla cada reproductor propio por su grupo. Idempotente."""
+    for p in list(VOCES):
+        matar_grupo(p, gracia=0.3)
+        VOCES.discard(p)
 
 
 def matar_grupo(proc, gracia=0.5):

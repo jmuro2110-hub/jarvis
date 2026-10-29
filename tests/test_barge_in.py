@@ -852,9 +852,10 @@ class T45_TelemetriaSinContenido(Base):
 
 class T46_SinInstanciasDuplicadas(unittest.TestCase):
     def test_arranque(self):
+        # Upgrade 08: la exclusión ya no es por nombre sino por el candado del supervisor (tests/test_arranque.py).
         src = (RAIZ / "Jarvis.command").read_text()
-        self.assertIn('pgrep -f "Jarvis.command"', src)
-        self.assertIn('pkill -f "jarvis_voz.py"', src)
+        self.assertIn('arranque.sh" terminal', src)
+        self.assertIn('pkill -f "jarvis_voz.py"', (RAIZ / "Jarvis.command.pre08").read_text())
 
 
 class Config(unittest.TestCase):

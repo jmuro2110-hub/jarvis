@@ -1,29 +1,7 @@
 #!/bin/bash
-# J.A.R.V.I.S. — arranque. Se abre solo al prender la Mac (elemento de inicio).
-# Corre dentro de Terminal a propósito: así hereda los permisos de micrófono y de Documentos.
-export PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
-cd "$HOME/Documents/Jarvis" || exit 1
+# J.A.R.V.I.S. — RESPALDO en Terminal (upgrade 08). El arranque normal es ~/Applications/Jarvis.app.
+# Usa el mismo supervisor y el mismo candado que la app: si Jarvis ya está activo, lo dice y sale sin matar a
+# nadie. En Terminal hereda los permisos de micrófono y Documentos de Terminal. Ctrl+C o cerrar la ventana
+# lo apagan completo. Versión anterior (terminaba procesos por nombre): Jarvis.command.pre08, solo para emergencia.
 printf '\033]0;J.A.R.V.I.S.\007'
-mkdir -p "$HOME/.jarvis"
-
-# Si ya había un Jarvis corriendo, lo apaga (nunca dos escuchando a la vez).
-# Primero sus bucles de arranque/agenda: si no, lo vuelven a levantar a los 5 s (upgrade 04).
-for p in $(pgrep -f "Jarvis.command"); do
-  [ "$p" != "$$" ] && kill "$p" 2>/dev/null
-done
-pkill -f "jarvis_voz.py" 2>/dev/null
-pkill -f "bin/agenda.py" 2>/dev/null
-sleep 1
-
-# La Mac no se duerme mientras Jarvis esté encendido
-caffeinate -i -w $$ &
-
-# Reloj interno: resumen matutino, vigía y panel
-( while true; do bin/jv agenda >> "$HOME/.jarvis/agenda.out" 2>&1; sleep 10; done ) &
-
-# Oídos: si se cae, se levanta solo
-while true; do
-  bash voz/iniciar.sh
-  echo "⚠️  La voz se detuvo. Reiniciando en 5 segundos (Ctrl+C dos veces para apagar Jarvis)..."
-  sleep 5
-done
+exec /bin/bash "$HOME/Documents/Jarvis/bin/arranque.sh" terminal

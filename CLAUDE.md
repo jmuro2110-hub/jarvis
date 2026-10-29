@@ -43,6 +43,7 @@ Cada módulo tiene su archivo en `modulos/`. Léelo antes de trabajar en ese tem
 | Voz (oídos y boca) | `modulos/voz.md` |
 | Seguridad (modo asistente, guardia, política) | `modulos/seguridad.md` |
 | Memoria (recuerdos permanentes) | `modulos/memoria.md` |
+| Arranque (Jarvis.app, supervisor, rollback) | `modulos/arranque.md` |
 
 El sistema va a crecer y cambiar. Si aparece un tema nuevo, crea un módulo nuevo en vez de meterlo en otro.
 

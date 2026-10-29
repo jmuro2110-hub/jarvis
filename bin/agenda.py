@@ -4,9 +4,10 @@
 """Reloj interno de Jarvis: resumen matutino a su hora, vigía cada 5 min, panel actualizado."""
 import datetime, os, sys, time, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from comun import CASA, config, log
+from comun import CASA, config, log, vigilar_supervisor
 
 def main():
+    vigilar_supervisor()                 # upgrade 08: si el supervisor muere, la agenda también
     log("agenda iniciada")
     ultimo_vigia = 0
     while True:

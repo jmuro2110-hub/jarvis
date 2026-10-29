@@ -13,20 +13,20 @@ J.A.R.V.I.S. — oídos
 comando rápido sin IA, o cerebro (Claude, con ChatGPT de respaldo) → voz.
 Después sigue la plática sin repetir «Jarvis» (upgrade 04, voz/conversacion.py).
 """
-import fcntl, json, os, re, sys, time, datetime, pathlib, subprocess
+import fcntl, json, os, re, signal, sys, time, datetime, pathlib, subprocess
 
 AQUI = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI.parent / "bin"))
 sys.path.insert(0, str(AQUI))
 from comun import (CASA, JARVIS, config, estado, log, abrir_url, mundo_de, pendientes,  # noqa: E402
-                   fecha_bonita, es_escolar)
+                   fecha_bonita, es_escolar, vigilar_supervisor)
 from decir import decir, callar                               # noqa: E402
 from pensar import pensar, primera_linea                      # noqa: E402
 from modo import modo, disponibles                            # noqa: E402
 import telemetria as tm                                       # noqa: E402
 import memoria                                                # noqa: E402
 from conversacion import Conversacion, PROCESSING, es_cierre  # noqa: E402
-from streaming import Hablador, ruta_sin_herramientas         # noqa: E402
+from streaming import Hablador, ruta_sin_herramientas, limpiar_voces  # noqa: E402
 from interrupciones import Vigia, tipo_de, CALLAR_RE, ESPERA_RE  # noqa: E402
 import numpy as np                                            # noqa: E402
 
@@ -579,9 +579,26 @@ def escuchar_una(oido, rapido, preciso, conv):
             oido.vaciar()
 
 
+def _terminar(*_):
+    """SIGTERM (supervisor del 08, salir de Jarvis.app, cierre de sesión) = Ctrl+C: suelta el micrófono al salir
+    del `with Oido` y calla los reproductores propios en el `finally` de abajo."""
+    raise KeyboardInterrupt
+
+
+def entorno():
+    """`--entorno` (lo usa bin/arranque.py antes de arrancar): dependencias y modelos presentes SIN red."""
+    import sounddevice  # noqa: F401
+    from faster_whisper.utils import download_model
+    for m in ("base", MODELO_WHISPER):
+        download_model(m, local_files_only=True)
+    return 0
+
+
 def main():
     from faster_whisper import WhisperModel
 
+    signal.signal(signal.SIGTERM, _terminar)
+    vigilar_supervisor()                              # upgrade 08: sin supervisor, la voz no se queda sola
     PID.write_text(str(os.getpid()))
     print("Cargando modelos (la primera vez descarga ~600 MB)...")
     rapido = WhisperModel("base", device="cpu", compute_type="int8")
@@ -592,6 +609,8 @@ def main():
     with Oido(mic=MIC, sensibilidad=SENSIBILIDAD) as oido:
         _BARGE.update(oido=oido, rapido=rapido)       # el vigía usa la MISMA cola y el mismo Whisper base
         estado("listo")
+        if os.environ.get("JARVIS_SUPERVISADO"):      # «listo» para bin/arranque.py: modelos cargados y oído abierto
+            (CASA / "voz_lista").write_text(str(os.getpid()))
         decir("Sistemas en línea, señor.")
         print('\n🎙  Di "Jarvis, …" o usa Ctrl+Opción+J   (Ctrl+C para salir)\n')
         while True:
@@ -602,7 +621,11 @@ if __name__ == "__main__":
     if "--prueba-permisos" in sys.argv:              # upgrade 08, etapa 1: permisos desde el Python real de la voz
         import prueba_permisos
         sys.exit(prueba_permisos.main())
+    if "--entorno" in sys.argv:
+        sys.exit(entorno())
     try:
         main()
     except KeyboardInterrupt:
         estado("apagado"); print("\nHasta luego, señor.")
+    finally:
+        limpiar_voces()

@@ -95,9 +95,11 @@ TOPIC=$(grep '^NTFY_TOPIC=' "$CASA/secretos.env" | cut -d= -f2)
 ok "Canal privado: $TOPIC"
 
 paso "Arranque automático al prender la Mac"
-osascript -e "tell application \"System Events\" to delete (every login item whose name is \"Jarvis.command\")" >/dev/null 2>&1
-osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$JARVIS/Jarvis.command\", hidden:false}" >/dev/null 2>&1 \
-  && ok "Jarvis arranca solo al iniciar sesión" || aviso "Agrégalo a mano: Ajustes → General → Ítems de inicio → + → Documentos/Jarvis/Jarvis.command"
+# Upgrade 08: arranca Jarvis.app (sin ventana). Jarvis.command queda de respaldo y NO se registra: un solo modo.
+# El binario se compila solo si no existe (recompilar puede volver a pedir micrófono y Automatización).
+[ -x "$HOME/Applications/Jarvis.app/Contents/MacOS/Jarvis" ] || bash "$JARVIS/app/construir.sh"
+/usr/bin/python3 -I "$JARVIS/bin/arranque.py" inicio app >/dev/null 2>&1 \
+  && ok "Jarvis.app arranca sola al iniciar sesión" || aviso "Agrégalo a mano: Ajustes → General → Ítems de inicio → + → Inicio/Aplicaciones/Jarvis.app"
 if [ -n "$HS_APP" ]; then
   osascript -e "tell application \"System Events\" to delete (every login item whose name is \"Hammerspoon\")" >/dev/null 2>&1
   osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$HS_APP\", hidden:true}" >/dev/null 2>&1

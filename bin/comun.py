@@ -1,8 +1,9 @@
 """Piezas compartidas de Jarvis: rutas, configuración, estado, registro."""
-import json, os, pathlib, re, time, datetime
+import json, os, pathlib, re, signal, time, datetime
 
 JARVIS = pathlib.Path(__file__).resolve().parent.parent
-CASA = pathlib.Path.home() / ".jarvis"          # estado privado (fuera de Documentos y de git)
+CASA = pathlib.Path(os.environ.get("JARVIS_CASA") or pathlib.Path.home() / ".jarvis")  # estado privado (fuera de
+#   Documentos y de git). JARVIS_CASA solo lo ponen las pruebas del supervisor (tests/test_arranque.py).
 CASA.mkdir(exist_ok=True)
 
 DEFAULTS = {
@@ -57,6 +58,32 @@ def secretos():
 def log(msg):
     with open(CASA / "jarvis.log", "a") as f:
         f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+
+def vigilar_supervisor():
+    """Upgrade 08: con bin/arranque.py, un tubo une a este proceso con su supervisor. Si el supervisor muere
+    (incluso con SIGKILL) el tubo da fin de archivo y este proceso se manda SIGTERM: nada queda escuchando sin
+    dueño. Se verifica que el descriptor sea de verdad ese tubo (dispositivo:inodo); si no, no se vigila."""
+    fd, ident = os.environ.pop("JARVIS_VIGIA_FD", None), os.environ.pop("JARVIS_VIGIA_ID", None)
+    if not fd or not ident:
+        return False
+    try:
+        st = os.fstat(int(fd))
+        if f"{st.st_dev}:{st.st_ino}" != ident:
+            return False
+    except (OSError, ValueError):
+        return False
+    import threading
+
+    def esperar():
+        try:
+            while os.read(int(fd), 1):
+                pass
+        except OSError:
+            pass
+        log("supervisor desaparecido: apagando")
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=esperar, daemon=True, name="vigia_supervisor").start()
+    return True
 
 def estado(nombre, texto=""):
     """escuchando / pensando / hablando / listo — lo lee el HUD de Hammerspoon."""

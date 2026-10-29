@@ -4,6 +4,8 @@ export PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 herramienta="$1"; shift
 if [ -z "$herramienta" ] || [ ! -f "$DIR/$herramienta.py" ]; then
-  echo "Herramientas: pensar, decir, avisar, modo, resumen, vigia, hq, agenda, latencia, memoria"; exit 1
+  echo "Herramientas: pensar, decir, avisar, modo, resumen, vigia, hq, agenda, latencia, memoria, arranque"; exit 1
 fi
+# arranque (upgrade 08): sin uv, para que la parada de emergencia no dependa de nada más que del sistema
+[ "$herramienta" = arranque ] && exec /usr/bin/python3 -I "$DIR/arranque.py" "$@"
 exec uv run --quiet --script "$DIR/$herramienta.py" "$@"

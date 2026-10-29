@@ -156,6 +156,18 @@ menu:setMenu(function()
     { title = "Callar                ⌃⌥.", fn = function() correr({ "decir", "--callar" }) end },
     { title = "Abrir carpeta Jarvis", fn = function() hs.execute("open '" .. JARVIS .. "'") end },
     { title = "Ver registro", fn = function() hs.execute("open -a Console '" .. CASA .. "/jarvis.log'") end },
+    { title = "-" },
+    -- upgrade 08: solo llaman al supervisor (bin/arranque.py). Hammerspoon no supervisa nada.
+    { title = "Estado de Jarvis", fn = function()
+        hs.task.new(JV, function(_, salida) hs.alert.show(salida ~= "" and salida or "Sin respuesta", 4) end,
+          { "arranque", "estado" }):start() end },
+    { title = "Detener Jarvis", fn = function()
+        hs.task.new(JV, function(_, salida) hs.alert.show(salida ~= "" and salida or "Sin respuesta", 3) end,
+          { "arranque", "detener" }):start() end },
+    { title = "Abrir Jarvis", fn = function()
+        hs.task.new(JV, function(_, salida) hs.alert.show(salida ~= "" and salida or "Sin respuesta", 3) end,
+          { "arranque", "abrir" }):start() end },
+    { title = "Ver registro de arranque", fn = function() hs.execute("open -a Console '" .. CASA .. "/arranque.log'") end },
     { title = "Recargar atajos", fn = hs.reload },
   }
 end)
