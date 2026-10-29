@@ -65,6 +65,7 @@ class Interrupcion:
     def __init__(self, tipo, resto, audio, cortado, t_voz):
         self.tipo, self.resto, self.audio, self.cortado, self.t_voz = tipo, resto, audio, cortado, t_voz
         self.t_parada = None
+        self.t_fin_orden = None      # 09A: fin estimado de la voz de JP en el micrófono (reloj del vigía)
 
 
 class Vigia:
@@ -76,6 +77,7 @@ class Vigia:
         self.max_frames_tick = max_frames_tick
         self.ruido = None                            # piso PROPIO, medido mientras Jarvis habla
         self.ocupado = False                         # una inferencia a la vez
+        self.silencio_cierre = 0
         self._reset()
 
     def _reset(self):
@@ -117,6 +119,7 @@ class Vigia:
         if not (por_silencio or por_ventana):
             return None
         audio, con_voz, t_voz = list(self.voz), self.con_voz, self.t_voz
+        self.silencio_cierre = self.silencio         # 09A: para estimar el fin de la orden
         self._reset()
         if con_voz < MIN_VOZ:
             return None                              # ruidito
@@ -130,11 +133,18 @@ class Vigia:
         if t_pedazo is not None and self.reloj() - t_pedazo < IGNORAR_INICIO:
             self._reset()                            # d) el arranque de cada pedazo no cuenta
             return None
-        for b in frames:
+        for i, b in enumerate(frames):
             seg = self._segmentar(b)
             if seg is not None:
+                # 09A: fin estimado de la voz = ahora − (silencio final + frames sacados sin revisar + cola)
+                try:
+                    atras = self.silencio_cierre + len(frames) - i - 1 + self.cola.qsize()
+                except NotImplementedError:
+                    atras = self.silencio_cierre + len(frames) - i - 1
+                t_fin = self.reloj() - atras * BLOQUE_SEG
                 det = self._evaluar(seg, pedazo)
                 if det is not None:
+                    det.t_fin_orden = t_fin
                     return det                       # un candidato por segmento; lo demás queda en la cola
         return None
 

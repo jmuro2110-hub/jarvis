@@ -204,13 +204,23 @@ def oir_bien(audio, preciso):
         return transcribir(preciso, audio, IDIOMA, prompt=VOCAB, preciso=True)
 
 
-def medir_frase(oido):
-    """Telemetría: duración de la frase (incluye el silencio final) y espera de silencio."""
+def medir_frase(oido, modo=None):
+    """Telemetría: duración de la frase (incluye el silencio final) y espera de silencio.
+    09A: además cola_atraso, fin_habla_a_cierre y el fin estimado de la voz para fin_habla_a_voz."""
     try:
         t_voz, t_ultima, t_fin = oido.ultima
         tm.registrar("captura_frase", (t_fin - t_voz) / 1e6)
         tm.registrar("espera_silencio", (t_fin - t_ultima) / 1e6)
         tm.fin_frase(t_fin)
+    except Exception:
+        pass
+    try:
+        tm.modo(modo)
+        fin = getattr(oido, "fin_habla", None)
+        if fin:
+            tm.registrar("cola_atraso", getattr(oido, "atraso", 0) * 100)
+            tm.registrar("fin_habla_a_cierre", (oido.ultima[2] - fin) / 1e6)
+            tm.fin_habla(fin)
     except Exception:
         pass
 
@@ -305,6 +315,8 @@ def _anotar_interrupcion(hablador, conv):
     conv.interrupcion = det
     if det.t_voz is not None and det.t_parada is not None:
         tm.registrar("barge_parada", (det.t_parada - det.t_voz) * 1000)
+    if getattr(det, "t_fin_orden", None) is not None and det.t_parada is not None:      # 09A
+        tm.registrar("barge_fin_a_parada", max(0.0, det.t_parada - det.t_fin_orden) * 1000)
 
 
 def atender_interrupcion(oido, preciso, det):
@@ -318,10 +330,14 @@ def atender_interrupcion(oido, preciso, det):
         texto = pedir_comando(oido, preciso, vaciar=False)   # lo que JP siga diciendo no se tira
     else:
         audio = det.audio
+        tm.modo("barge")                                      # 09A: fin de la orden para fin_habla_a_voz
+        if getattr(det, "t_fin_orden", None) is not None:
+            tm.fin_habla(int(det.t_fin_orden * 1e9))
         if det.cortado:                                       # seguía hablando al cortar la ventana de 2.5 s
             resto = oido.frase(fin_silencio=1.3, max_dur=25, espera_inicio=1.0, cerrar=CERRAR)
             if resto is not None and not isinstance(resto, str):
                 audio = np.concatenate([audio, resto])
+                tm.fin_habla(getattr(oido, "fin_habla", None))
         estado("pensando", "transcribiendo…")
         texto = oir_bien(audio, preciso)                       # Groq una vez (o small de respaldo)
     activado, r = separar(texto or "")
@@ -380,7 +396,7 @@ def pedir_comando(oido, preciso, vaciar=True):
         print("   (no escuché nada)"); estado("listo"); return ""
     if not tm.activa():
         tm.nueva("voz")
-    medir_frase(oido)
+    medir_frase(oido, "atajo" if vaciar else "tras_tin")
     estado("pensando", "transcribiendo…")
     return oir_bien(audio, preciso)
 
@@ -439,7 +455,7 @@ def esperar_seguimiento(oido, preciso, conv):
             if otra_voz(desde):                       # el vigía/resumen habló: no es una orden de JP
                 conv.descartar("otra_voz"); oido.vaciar(); continue
             tm.nueva("voz")
-            medir_frase(oido)
+            medir_frase(oido, "seguimiento")
             try:
                 conv.detectado((oido.ultima[0] - t_abre) / 1e6)
             except Exception:
@@ -490,7 +506,8 @@ def conversar(oido, preciso, conv, orden=None, vaciar=True):
             if det is not None:                       # upgrade 06: le hablaron encima («Jarvis, …»)
                 tm.nueva("voz")                       # la intervención es su propia petición (telemetría)
                 accion, x = atender_interrupcion(oido, preciso, det)
-                tm.terminar()
+                if accion != "turno":                 # 09A: la orden de barge-in conserva su petición
+                    tm.terminar()                     # (antes su respuesta quedaba sin telemetría)
                 if accion == "cerrar":
                     conv.cerrar("callar"); return
                 if accion == "manual":
@@ -558,7 +575,7 @@ def escuchar_una(oido, rapido, preciso, conv):
             hablo = True
             tm.nueva("voz")
             tm.registrar("deteccion_jarvis", ms)
-            medir_frase(oido)
+            medir_frase(oido, "reposo")
             if not orden_borrador and voz_seg(oido) <= SOLO_JARVIS_SEG:
                 # Solo «Jarvis» (upgrade 05): no se manda a Groq (eso tardaba 1–3 s mientras JP ya hablaba)
                 # y no se vacía la cola: la orden que ya empezó se conserva completa.

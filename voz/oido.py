@@ -5,6 +5,7 @@ import sounddevice as sd
 
 RATE = 16000
 CHUNK = 1600            # 100 ms
+BLOQUE_NS = 100_000_000  # duración de un frame de la cola (CHUNK / RATE), en ns
 WAKE_RE = re.compile(r"\b(j[aá]rvis|jarvi|yarvis|yarvi|harvis|jarbis|yarbis|charvis|garvis|jervis|yervis|travis|jardis|yardis)\b", re.I)
 
 
@@ -14,6 +15,7 @@ class Oido:
         self.sens = sensibilidad
         self.ruido = None
         self.ultima = None      # telemetría: (inicio de voz, último pedazo con voz, fin) en perf_counter_ns
+        self.atraso, self.fin_habla = 0, None   # 09A: frames en cola al cerrar y fin estimado de la voz (ns)
         self.stream = sd.InputStream(samplerate=RATE, channels=1, dtype="int16",
                                      blocksize=CHUNK, device=mic, callback=self._cb)
 
@@ -74,7 +76,16 @@ class Oido:
                     if con_voz < 3:      # menos de 0.3 s de voz: ruidito
                         hablando, voz, con_voz = False, [], 0
                         continue
-                    self.ultima = (t_voz, t_ultima, time.perf_counter_ns())
+                    t_cierre = time.perf_counter_ns()
+                    self.ultima = (t_voz, t_ultima, t_cierre)
+                    # 09A: los tiempos de arriba son de PROCESO. Fin estimado de la voz en el micrófono: el
+                    # frame que cerró se grabó hace ≈ (frames aún en la cola) × 100 ms, y la última voz
+                    # `silencio` frames antes. Solo telemetría; no cambia la captura.
+                    try:
+                        self.atraso = self.cola.qsize()
+                    except NotImplementedError:
+                        self.atraso = 0
+                    self.fin_habla = t_cierre - (self.atraso + silencio) * BLOQUE_NS
                     return np.concatenate(voz).astype(np.float32) / 32768.0
 
 

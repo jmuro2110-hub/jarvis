@@ -18,6 +18,7 @@ import json, os, re, selectors, signal, subprocess, sys, tempfile, time, pathlib
 BIN = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(BIN))
 from comun import limpiar_para_voz                    # noqa: E402
+import telemetria as tm                                # noqa: E402
 
 MAX_LINEA = 4 * 1024 * 1024        # una línea de stream más grande que esto = stream inservible
 MAX_FRASE = 600                    # sin límite de frase en 600 caracteres: se espera al resultado
@@ -238,8 +239,9 @@ def coincide(hablado, final):
 def lanzar_decir(texto):
     """bin/decir.py como hijo: voz.lock, Juan, limpiar_para_voz, callar por pkill. Hereda JARVIS_REQ_ID.
     En su PROPIO grupo de procesos (upgrade 06): cancelar mata a decir.py y a su `say`/`afplay`, y a nadie más."""
+    env = dict(os.environ, JARVIS_T_LANZADO=str(time.perf_counter_ns()))    # 09A: voz_lanzamiento
     p = subprocess.Popen([sys.executable, str(BIN / "decir.py"), texto], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(os.environ),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
                          start_new_session=True)
     VOCES.difference_update([v for v in VOCES if v.poll() is not None])
     VOCES.add(p)
@@ -335,7 +337,13 @@ class Hablador:
             return
         if self.cola:
             texto = self.cola.pop(0)
-            self.proc = self.lanzar(texto)
+            primera = self.t_inicio is None and tm.reclamar_primera_voz()   # 09A: el hijo mide fin_habla_a_voz
+            if primera:
+                os.environ["JARVIS_VOZ_PRIMERA"] = "1"
+            try:
+                self.proc = self.lanzar(texto)
+            finally:
+                os.environ.pop("JARVIS_VOZ_PRIMERA", None)
             self.t_pedazo = self.reloj()
             self.hablado.append(texto)
             if self.t_inicio is None:

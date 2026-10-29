@@ -124,6 +124,14 @@ def main():
               + ("; rechazados: " + ", ".join(f"{m} {c}" for m, c in sorted(rech.items(), key=lambda x: -x[1]))
                  if rech else "")
               + ("; tipos: " + ", ".join(f"{m} {c}" for m, c in sorted(tipos.items())) if tipos else ""))
+    recorrido = [f for f in filas if f["etapa"] == "fin_habla_a_voz"]          # upgrade 09A
+    if recorrido:
+        tabla("Fin del habla de JP → primera voz útil (09A), por modo · ruta:",
+              sorted(agrupar(recorrido, lambda f: f"{f.get('modo') or '?'} · {f.get('ruta') or '?'}").items()))
+    lanz = [f for f in filas if f["etapa"] == "voz_lanzamiento"]
+    if lanz:
+        tabla("Hijo de voz lanzado → reproductor (09A), por proveedor:",
+              sorted(agrupar(lanz, lambda f: f.get("motivo") or "?").items()))
     busq = [f for f in filas if f["etapa"] == "memoria_busqueda"]
     acc = [f for f in filas if f["etapa"] in ("memoria_accion", "memoria_lectura")]
     if busq or acc:
@@ -149,7 +157,10 @@ def main():
           "\ntts_inicio en voz anticipada = se lanzó el hijo de voz (el `say` real arranca ~0.1–0.3 s después)."
           "\nUpgrade 06: claude_salida = claude cerrado; ahorro_result = salida − tts_inicio (observado);"
           "\nbarge_parada se estima con el reloj de los bloques de audio."
-          "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido.")
+          "\n'total' termina cuando se lanza la voz (say/afplay), no cuando suena el primer sonido."
+          "\nUpgrade 09A: fin_habla = ESTIMACIÓN del fin de la voz de JP en el micrófono (cierre − frames en cola"
+          "\ny de silencio × 100 ms); fin_habla_a_voz llega hasta que arranca el reproductor (say/afplay), no"
+          "\nhasta el sonido físico. Es el recorrido medido de punta a punta, no una suma de medianas.")
 
 if __name__ == "__main__":
     main()

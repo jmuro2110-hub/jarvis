@@ -39,7 +39,17 @@ ETAPAS = ("captura_frase", "espera_silencio", "deteccion_jarvis", "transcripcion
           # después del 07: transcripción tirada antes de Claude (motivo = solo_vocabulario).
           "transcripcion_descartada",
           # IDLE: Whisper base tardó más de 2 s (motivo lenta) o no encontró «Jarvis» (motivo sin_jarvis).
-          "deteccion_base")
+          "deteccion_base",
+          # upgrade 09A (métricas nuevas; las anteriores NO cambian de significado). fin_habla = estimación de
+          # cuándo dejó de sonar la voz de JP en el micrófono: hora de cierre − (frames aún en la cola + frames
+          # de silencio final) × 100 ms. cola_atraso: frames sin procesar al cerrar la frase (× 100 ms).
+          # fin_habla_a_cierre: fin_habla → frase cerrada. fin_habla_a_voz: fin_habla → arranca el reproductor
+          # (say/afplay) con la PRIMERA voz útil de la respuesta (no cuentan tin ni Pop); lleva `modo`.
+          # voz_lanzamiento: se lanzó el hijo decir.py → arranca su reproductor (motivo = proveedor).
+          # tts_descarga: petición a ElevenLabs → audio recibido. barge_fin_a_parada: fin estimado de la orden
+          # de interrupción (mismo cálculo con la cola del vigía) → voz de Jarvis parada.
+          "cola_atraso", "fin_habla_a_cierre", "fin_habla_a_voz", "voz_lanzamiento", "tts_descarga",
+          "barge_fin_a_parada")
 # Por qué no hubo voz anticipada (o qué incidente hubo). Nunca texto.
 MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inesperado", "desactivado", "error",
                   "no_voz", "markdown", "distinto", "salida_tardia",
@@ -50,7 +60,11 @@ MOTIVOS_STREAM = ("con_tools", "sin_frase", "init_con_tools", "tool_use_inespera
                   "guardado", "duplicado", "sensible", "ambiguo", "largo", "corregido", "desactivado", "consulta",
                   "sin_antecedente", "error_escritura", "error_lectura", "invalido",
                   # transcripción descartada
-                  "solo_vocabulario", "lenta")
+                  "solo_vocabulario", "lenta",
+                  # proveedor de voz (09A): ElevenLabs, say con voz elegida, say con la voz del sistema
+                  "eleven", "say_voz", "say_sistema")
+# De dónde viene la frase (09A): reposo de un jalón, orden tras el tin, seguimiento, ⌃⌥J, orden en barge-in.
+MODOS = ("reposo", "tras_tin", "seguimiento", "atajo", "barge")
 # claude_duracion / claude_api: duration_ms y duration_api_ms que reporta el propio Claude (JSON).
 # claude_arranque_est = claude_p − claude_duracion: ESTIMACIÓN del arranque local, no medida exacta.
 ESTADOS = ("exito", "error", "timeout", "fallback")
@@ -93,6 +107,13 @@ def desde_entorno(origen_defecto="texto", con_total=True):
     try:
         nueva(os.environ.get("JARVIS_ORIGEN") or origen_defecto, ahora() if con_total else None,
               os.environ.get("JARVIS_REQ_ID"))
+        # 09A: el hijo de voz que lleva la PRIMERA voz útil (JARVIS_VOZ_PRIMERA=1) mide fin_habla_a_voz;
+        # los demás (pedazos siguientes, `jv decir` desde Claude) no.
+        if os.environ.get("JARVIS_VOZ_PRIMERA") == "1" and os.environ.get("JARVIS_T_HABLA", "").isdigit():
+            _actual["t_habla"], _actual["primera_hecha"] = int(os.environ["JARVIS_T_HABLA"]), False
+            _actual["modo"] = os.environ.get("JARVIS_MODO")
+        lanzado = os.environ.get("JARVIS_T_LANZADO", "")
+        _actual["t_lanzado"] = int(lanzado) if lanzado.isdigit() else None
     except Exception:
         pass
 
@@ -130,8 +151,52 @@ def sesion(tipo):
 def terminar():
     try:
         _actual.clear()
-        os.environ.pop("JARVIS_REQ_ID", None)
-        os.environ.pop("JARVIS_ORIGEN", None)
+        for k in ("JARVIS_REQ_ID", "JARVIS_ORIGEN", "JARVIS_T_HABLA", "JARVIS_MODO"):
+            os.environ.pop(k, None)
+    except Exception:
+        pass
+
+
+# ---------- recorrido completo (upgrade 09A) ----------
+def modo(m):
+    """De dónde viene la frase de esta petición (MODOS). Viaja a los hijos de voz por JARVIS_MODO."""
+    try:
+        if _actual and m in MODOS:
+            _actual["modo"] = m
+            os.environ["JARVIS_MODO"] = m
+    except Exception:
+        pass
+
+
+def fin_habla(t_ns):
+    """Fin estimado de la voz de JP (perf_counter_ns; el reloj es del sistema, vale entre procesos).
+    Reinicia la marca de primera voz: lo que suene después es la respuesta a ESTA frase."""
+    try:
+        if _actual and t_ns:
+            _actual["t_habla"], _actual["primera_hecha"] = int(t_ns), False
+            os.environ["JARVIS_T_HABLA"] = str(int(t_ns))
+    except Exception:
+        pass
+
+
+def reclamar_primera_voz():
+    """El padre va a lanzar un hijo de voz: si aún no sonó la primera voz útil de esta frase, la mide el hijo
+    (True) y el padre ya no la vuelve a medir."""
+    try:
+        if _actual.get("t_habla") and not _actual.get("primera_hecha"):
+            _actual["primera_hecha"] = True
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def primera_voz():
+    """Arrancó el reproductor de una voz útil: fin_habla_a_voz, una sola vez por frase."""
+    try:
+        if _actual.get("t_habla") and not _actual.get("primera_hecha"):
+            _actual["primera_hecha"] = True
+            registrar("fin_habla_a_voz", _ms(_actual["t_habla"]), extra={"modo": _actual.get("modo")})
     except Exception:
         pass
 
@@ -160,6 +225,8 @@ def registrar(nombre, ms, ruta=None, estado="exito", extra=None):
                 fila[k] = v
             elif k in ("candidatos", "seleccionados") and isinstance(v, int) and not isinstance(v, bool):
                 fila[k] = max(0, min(v, 100000))
+            elif k == "modo" and v in MODOS:                 # upgrade 09A
+                fila[k] = v
         ARCHIVO.parent.mkdir(parents=True, exist_ok=True)
         with open(ARCHIVO, "a") as f:
             f.write(json.dumps(fila) + "\n")
@@ -216,10 +283,15 @@ def voz_preparando():
         pass
 
 
-def voz_empieza():
-    """Justo antes de lanzar say/afplay: cierra 'voz_preparacion' y el total."""
+def voz_empieza(proveedor=None):
+    """Justo antes de lanzar say/afplay: cierra 'voz_preparacion' y el total.
+    09A: también voz_lanzamiento (si es un hijo de voz) y fin_habla_a_voz (si es la primera voz útil)."""
     global _voz_t0
     try:
+        if _actual.get("t_lanzado"):
+            registrar("voz_lanzamiento", _ms(_actual["t_lanzado"]), extra={"motivo": proveedor})
+            _actual["t_lanzado"] = None
+        primera_voz()
         if _voz_t0 is not None:
             registrar("voz_preparacion", _ms(_voz_t0))
             _voz_t0 = None

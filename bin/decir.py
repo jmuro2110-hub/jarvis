@@ -40,17 +40,20 @@ def elevenlabs(texto, c, s):
                          "voice_settings": {"stability": 0.55, "similarity_boost": 0.75, "style": 0.15}}).encode()
     req = urllib.request.Request(url, data=cuerpo, headers={
         "xi-api-key": llave, "Content-Type": "application/json", "Accept": "audio/mpeg"})
+    t0 = tm.ahora()
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             audio = r.read()
     except Exception as e:
+        tm.registrar("tts_descarga", tm._ms(t0), estado="timeout" if "timed out" in str(e) else "error")
         log(f"ElevenLabs falló: {e}")
         return False
+    tm.registrar("tts_descarga", tm._ms(t0))
     mp3 = CASA / "voz.mp3"
     mp3.write_bytes(audio)
     u[mes] = usados + len(texto)
     escribir_json(CASA / "eleven_uso.json", u)
-    tm.voz_empieza()
+    tm.voz_empieza("eleven")
     subprocess.run(["afplay", str(mp3)])
     return True
 
@@ -70,7 +73,7 @@ def decir(texto, forzar=False):
             v = voz_mac(c)
             if v:
                 cmd += ["-v", v]
-            tm.voz_empieza()
+            tm.voz_empieza("say_voz" if v else "say_sistema")
             ok = subprocess.run(cmd + [texto]).returncode == 0
         estado("listo")
         return ok
