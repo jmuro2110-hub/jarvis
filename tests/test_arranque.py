@@ -206,6 +206,28 @@ class T03_ParadaVoluntaria(Base):
         self.assertEqual(self.estado()["estado"], "detenido")
         self.assertTrue(arranque_libre(self.casa))
 
+    def test_detener_con_otro_idioma(self):
+        """Física G (2026-10-29): supervisor con LANG=es_MX, «Detener» desde Hammerspoon sin LANG."""
+        e = self.env(JARVIS_MIC_APP="autorizado", LANG="es_MX.UTF-8", LC_ALL="es_MX.UTF-8")
+        a = subprocess.Popen([PY, "-I", str(RAIZ / "bin" / "arranque.py"), "supervisar", "--lanzador", "app"],
+                             env=e, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.procs.append(a)
+        self.listo(a)
+        r = subprocess.run([PY, "-I", str(RAIZ / "bin" / "arranque.py"), "detener"], env=self.env(),
+                           capture_output=True, text=True, timeout=60)        # sin LANG, como Hammerspoon
+        self.assertEqual(r.returncode, 0, r.stdout)
+        a.wait(10)
+        self.assertFalse(vivo(self.pids("voz")[0]))
+        self.assertIn("parada pedida", self.log())
+
+    def test_identidad_no_depende_del_idioma(self):
+        with mock.patch.dict(os.environ, {"LANG": "es_MX.UTF-8", "LC_ALL": "es_MX.UTF-8"}):
+            es = arranque.identidad(os.getpid())
+        with mock.patch.dict(os.environ, {"LANG": "", "LC_ALL": ""}):
+            otro = arranque.identidad(os.getpid())
+        self.assertEqual(es, otro)
+        self.assertRegex(es, r"^[A-Z][a-z]{2} [A-Z][a-z]{2} ")             # «Thu Oct 29 …»
+
     def test_parar_con_reinicio_pendiente(self):
         self.cmds = self.comandos(voz="cae")
         cfg_lento = self.env()
@@ -406,6 +428,26 @@ class T10_ElementosDeInicio(unittest.TestCase):
         for prohibido in ("pkill", "pgrep", "killall"):
             self.assertNotIn(prohibido, t)
         self.assertTrue((RAIZ / "Jarvis.command.pre08").exists())
+
+
+class T09b_HammerspoonInterfaz(unittest.TestCase):
+    """Lua no se prueba aquí: se revisa que las piezas estén (física D y reapertura las confirman)."""
+    def setUp(self):
+        self.lua = (RAIZ / "hammerspoon" / "init.lua").read_text()
+
+    def test_menu_no_se_lo_lleva_el_recolector(self):
+        self.assertIn("jarvisMenu = hs.menubar.new()", self.lua)
+        self.assertNotIn("local menu = hs.menubar.new()", self.lua)
+        for global_ in ("estadoWatcher = hs.pathwatcher", "jarvisWatcher = hs.application.watcher"):
+            self.assertIn(global_, self.lua)
+
+    def test_reapertura_avisa(self):
+        self.assertIn('"mx.jpmuro.jarvis"', self.lua)
+        self.assertIn("Jarvis ya está activo, señor.", self.lua)
+        bloque = self.lua.split("jarvisWatcher")[1]
+        self.assertNotIn("arranque", bloque.split("hs.alert.show")[0].replace("arranque_estado.json", ""))
+        for menu in ('{ "arranque", "estado" }', '{ "arranque", "detener" }', '{ "arranque", "abrir" }'):
+            self.assertIn(menu, self.lua)
 
 
 class T11_RegistroSinDatosPrivados(Base):

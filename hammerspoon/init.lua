@@ -130,7 +130,10 @@ hs.hotkey.bind({ "ctrl", "alt" }, "H", function() correr({ "hq", "--abrir" }) en
 hs.hotkey.bind({ "ctrl", "alt" }, ".", function() correr({ "decir", "--callar" }); ocultarHud() end)
 
 ---------------------------------------------------------------- menú en la barra
-local menu = hs.menubar.new()
+-- Global a propósito (como estadoWatcher): en un `local` el recolector de Lua se lo llevaba y el ◉ desaparecía
+-- de la barra al rato (física 2026-10-29: «cada que Jarvis se callaba»).
+jarvisMenu = hs.menubar.new()
+local menu = jarvisMenu
 local function iconoMenu()
   local c = hs.canvas.new({ x = 0, y = 0, w = 18, h = 18 })
   c:appendElements(
@@ -171,5 +174,27 @@ menu:setMenu(function()
     { title = "Recargar atajos", fn = hs.reload },
   }
 end)
+
+---------------------------------------------------------------- upgrade 08: Jarvis.app abierta otra vez
+-- Abrir una app que ya corre no crea un segundo proceso: macOS solo la pone al frente, así que el supervisor
+-- nunca se entera. El aviso lo da Hammerspoon (solo avisa; no supervisa nada). El binario de la app no se
+-- recompila para esto: cambiaría su firma y macOS volvería a pedir micrófono, Documentos y Automatización.
+local BUNDLE_JARVIS = "mx.jpmuro.jarvis"
+local jarvisLanzada, anteriorApp = 0, nil
+jarvisWatcher = hs.application.watcher.new(function(_, evento, app)
+  if not app then return end
+  local esJarvis = app:bundleID() == BUNDLE_JARVIS
+  if evento == hs.application.watcher.launched and esJarvis then
+    jarvisLanzada = hs.timer.secondsSinceEpoch(); return
+  end
+  if evento ~= hs.application.watcher.activated then return end
+  if not esJarvis then anteriorApp = app; return end
+  if hs.timer.secondsSinceEpoch() - jarvisLanzada < 15 then return end     -- recién abierta: no es reapertura
+  if #app:allWindows() > 0 then return end                                  -- es una alerta de la propia app
+  local st = hs.json.read(CASA .. "/arranque_estado.json")
+  if not st or (st.estado ~= "escuchando" and st.estado ~= "integracion_pendiente") then return end
+  hs.alert.show("Jarvis ya está activo, señor.", 2.5)
+  if anteriorApp and anteriorApp:isRunning() then anteriorApp:activate() end -- le devuelve el foco
+end):start()
 
 hs.alert.show("J.A.R.V.I.S. en línea", 1.5)

@@ -74,10 +74,12 @@ def anotar(msg, eco=False):
 
 def identidad(pid):
     """PID + hora de inicio según ps: un PID reciclado no coincide. El comando no entra porque cambia con exec
-    (/usr/bin/python3 se vuelve el Python de las herramientas; un hijo recién creado aún no ha hecho exec)."""
+    (/usr/bin/python3 se vuelve el Python de las herramientas; un hijo recién creado aún no ha hecho exec).
+    Siempre con LC_ALL=C: el supervisor corre con LANG=es_MX («jue. 29 oct») y Hammerspoon sin LANG («Thu Oct 29»);
+    sin esto, «Detener Jarvis» desde el menú no reconocía al supervisor y no paraba nada (física G, 2026-10-29)."""
     try:
         r = subprocess.run(["/bin/ps", "-o", "stat=", "-o", "lstart=", "-p", str(int(pid))],
-                           capture_output=True, text=True, timeout=5)
+                           capture_output=True, text=True, timeout=5, env={"LC_ALL": "C", "PATH": "/usr/bin:/bin"})
     except Exception:
         return None
     partes = r.stdout.split(None, 1)
