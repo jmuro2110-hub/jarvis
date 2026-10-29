@@ -3,7 +3,7 @@
 > Este archivo es la memoria del PROYECTO (no de JP). Cualquier chat nuevo (Claude, ChatGPT o Jarvis) empieza leyendo esto.
 > Se actualiza al cerrar cada paso: qué se hizo, qué se decidió, qué sigue.
 
-**Última actualización:** 2026-10-28 (activación en IDLE arreglada; upgrade 08 etapa 0)
+**Última actualización:** 2026-10-29 (upgrade 08 implementado y probado en físico; falta reposo manual)
 
 ## Visión
 - Corto plazo: el Jarvis más cercano al de Iron Man posible en la Mac de JP, con lo que hay y máximo $200 MXN/mes extra.
@@ -26,7 +26,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Iniciativa: resumen matutino 7:30, vigía (Minecraft 1/2/3 h, entregas), avisos Mac + iPhone (ntfy, canal en ~/.jarvis/secretos.env).
 - Panel Jarvis HQ (Ctrl+Alt+H): meta del coche, pendientes, clima, juego, últimas pláticas.
 - Hammerspoon: Ctrl+Alt+J hablar, Ctrl+Alt+Espacio escribir, Ctrl+Alt+H panel, Ctrl+Alt+. callar. (Teclado Windows: Alt = Opción.)
-- Arranque automático (Jarvis.command, una sola instancia, se reinicia solo).
+- Arranque en segundo plano (upgrade 08, 2026-10-29): `~/Applications/Jarvis.app` (binario delgado, firma ad-hoc, no se recompila) como elemento de inicio → `bin/arranque.sh` → supervisor `bin/arranque.py` (candado flock, tubo vigía, hijos por PID+hora, reintentos 5–120 s, estados, registro `~/.jarvis/arranque.log`). Respaldo: Jarvis.command con el mismo supervisor. Controles en el menú de Hammerspoon y `jv arranque estado|detener|abrir|inicio`. Ver modulos/arranque.md.
 - Medición de latencia (upgrade 01, 2026-10-24): `bin/telemetria.py` registra cada etapa con ID por petición en ~/.jarvis/metricas_latencia.jsonl (sin contenido); `jv latencia` da p50/p90/mín/máx por etapa, origen y ruta. 19 pruebas con mocks en tests/. Primera muestra real: `claude -p` = 13.4 s para una respuesta trivial (texto).
 - Seguridad (upgrade 02, 2026-10-24): modo asistente separado del de desarrollo. `claude -p` corre con `--restricted` + guardia PreToolUse (`bin/guardia.py` → `bin/politica.py`); Codex de respaldo en `read-only` sin plugins/computer-use/MCP. Bloquea antes de ejecutar: borrar, enviar, pagar (requieren aprobación y aún no hay interfaz: quedan bloqueados), publicar en IG/TikTok/Snapchat y conectar Snapchat (prohibido siempre), Classroom con cuenta personal, y cualquier comando no clasificado. Sin perfil escolar ya no cae al personal. Auditoría en ~/.jarvis/seguridad.jsonl. 24 pruebas nuevas (tests/test_seguridad.py) + las 19 del 01 = 43 OK. Ver modulos/seguridad.md.
 - Arreglo: "desactiva/quita/apaga… el modo X" ya no activa el modo (lo resuelve el cerebro).
@@ -64,6 +64,7 @@ Flujo: ChatGPT propone → Claude revisa → JP pega el prompt en Jarvis → Jar
 - Idea reservada (después del 08, no implementada): memoria sugerida con confirmación. Jarvis detecta una posible preferencia y pregunta «¿Quiere que recuerde que…?»; solo un «sí» explícito de JP ligado a esa propuesta la guarda por el mecanismo local del 07. «No», silencio, vencimiento o ambigüedad no guardan nada. Misma validación de privacidad y ámbitos; nunca confirmaciones del modelo, páginas o herramientas.
 
 ## Paso actual
+- Upgrade 08 (2026-10-29): implementado (1196b0c, a229656, c8a954a; 394 pruebas OK). Física aprobada: A, B, D, E, F (cierre de sesión y reinicio: una instancia, sin Terminal, sin avisos dobles; listo en 10.8 / 8.5 s en frío), H (rollback a Terminal y regreso), G salvo reposo manual, C «cállate». Fallaron y van al 09 por decisión de JP: «espera» (`jarvis_en_medio`) y base lento con música. Pendientes: reposo manual (G) y Automatización de Minecraft (JP). Latencia sin regresión salvo barge-in con música. Arreglos durante la física: `ps` con LC_ALL=C (Detener del menú no paraba), menú de Hammerspoon global (se borraba el ◉), aviso al reabrir vía Hammerspoon, listado de elementos de inicio.
 - Upgrade 07 terminado (2026-10-28): memoria permanente con 353 pruebas OK. Prueba física aprobada: guardar por voz y ⌃⌥Espacio, uso en Claude, 40 desde la memoria con sesión nueva, corregir a 50 por voz (local, 1.9 s), «¿cuánto deberían durar mis bloques?» → 50, consultar, olvidar y «cállate» a media respuesta (paró en 2.5 s). Arreglos durante la prueba: llamado mal transcrito («Jardis»), red de seguridad de la bitácora, intenciones sin acentos ni mayúsculas. Recuerdos activos: bloques de 50 minutos (escuela) y avanzar una mejora a la vez (desarrollo). Después del 07, aparte: eco del prompt de Groq descartado ✅ (bb5416e): 3+ palabras todas de VOCAB («Pendientes, tarea, rutina, panel.») → «No le entendí, señor.», sin Claude. 357 pruebas OK. Activación en IDLE arreglada (4c0f1d7, 367 pruebas OK, prueba física aprobada).
 - Upgrade 06 terminado (2026-10-27): barge-in («cállate» ≈1.6 s, «espera» ≈2.2 s), cero falsas interrupciones con música, voz al result 0.39–0.52 s antes, pendientes solo personales.
 - Límites abiertos (07): búsqueda léxica, sin semántica; dos recuerdos que se contradicen se pasan juntos; la validación de privacidad es por palabras (conservadora); reiniciar Jarvis no borra la sesión reciente (30 min).
