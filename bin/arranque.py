@@ -501,9 +501,12 @@ def osa(script):
 
 
 def elementos(osa=osa):
-    c, out = osa('tell application "System Events" to set l to every login item\n'
-                 'set s to ""\nrepeat with i in l\nset s to s & (name of i) & tab & (path of i) & linefeed\n'
-                 'end repeat\nreturn s')
+    # Nombres y rutas en dos listas: `repeat with i in (every login item)` da referencias y `path of i`
+    # falla («No puede convertirse path of item 1…», física del bloque 2, 2026-10-29).
+    c, out = osa('tell application "System Events"\nset ns to name of every login item\n'
+                 'set ps to path of every login item\nend tell\nset s to ""\n'
+                 'repeat with k from 1 to count of ns\n'
+                 'set s to s & (item k of ns) & tab & (item k of ps) & linefeed\nend repeat\nreturn s')
     if c != 0:
         raise RuntimeError(f"System Events no respondió: {out[:120]}")
     return [tuple(x.split("\t", 1)) for x in out.splitlines() if "\t" in x]
